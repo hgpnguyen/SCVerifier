@@ -1,0 +1,6 @@
+owner = msg.sender,a
+price = 100,b
+"Purchase(msg.sender, price)",c
+return price,d
+price = _price,e
+"PriceChange(owner, price)",f

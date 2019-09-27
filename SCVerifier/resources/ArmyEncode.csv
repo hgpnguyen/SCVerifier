@@ -1,0 +1,97 @@
+nextSnapshotTime = firstSnapshotTime,a
+owner = msg.sender,b
+require(msg.sender == owner),c
+clans = Clans(clansContract),d
+operator[gameContract] = isOperator,e
+require(newPlayersPercent > 0 && newPlayersPercent <= 10),f
+require(newClansPercent > 0 && newClansPercent <= 10),g
+playerDivPercent = newPlayersPercent,h
+clanDivPercent = newClansPercent,i
+require(operator[msg.sender]),j
+gooBankroll += gooSpent,k
+ArmyPower memory armyPower = armyPowerSnapshots[player][lastArmyPowerUpdate[player]],l
+"return (armyPower.attack, armyPower.defense, armyPower.looting)",m
+playersAttack = armyPower.attack,n
+playersLooting = armyPower.looting,o
+targetsDefense = armyPowerSnapshots[target][lastArmyPowerUpdate[target]].defense,p
+ArmyPower memory existingArmyPower = armyPowerSnapshots[player][lastArmyPowerUpdate[player]],q
+uint256 snapshotDay = allocatedWarFundSnapshots.length,r
+existingArmyPower.attack += attackGain,s
+existingArmyPower.defense += defenseGain,t
+existingArmyPower.looting += lootingGain,u
+armyPowerSnapshots[player][snapshotDay] = existingArmyPower,v
+lastArmyPowerUpdate[player] != snapshotDay,w
+lastArmyPowerUpdate[player] = snapshotDay,x
+totalArmyPower += (attackGain + defenseGain),y
+"clans.increaseClanPower(player, attackGain + defenseGain)",z
+existingArmyPower.attack -= attackLoss,a_a
+existingArmyPower.defense -= defenseLoss,a_b
+existingArmyPower.looting -= lootingLoss,a_c
+existingArmyPower.attack == 0 && existingArmyPower.defense == 0,a_d
+armyPowerZeroedSnapshots[player][snapshotDay] = true,a_e
+delete armyPowerSnapshots[player][snapshotDay],a_f
+totalArmyPower -= (attackLoss + defenseLoss),a_g
+"clans.decreaseClanPower(player, attackLoss + defenseLoss)",a_h
+existingArmyPower.attack = uint80(int(existingArmyPower.attack) + attackChange),a_i
+existingArmyPower.defense = uint80(int(existingArmyPower.defense) + defenseChange),a_j
+existingArmyPower.looting = uint80(int(existingArmyPower.looting) + lootingChange),a_k
+"changeTotalArmyPower(player, attackChange, defenseChange)",a_l
+uint224 newTotal = uint224(int(totalArmyPower) + attackChange + defenseChange),a_m
+newTotal > totalArmyPower,a_n
+"clans.increaseClanPower(player, newTotal - totalArmyPower)",a_o
+newTotal < totalArmyPower,a_p
+"clans.decreaseClanPower(player, totalArmyPower - newTotal)",a_q
+totalArmyPower = newTotal,a_r
+require(now + 6 hours > nextSnapshotTime),a_s
+totalArmyPowerSnapshots.push(totalArmyPower),a_t
+allocatedWarFundSnapshots.push((gooBankroll * playerDivPercent) / 100),a_u
+uint256 allocatedClanWarFund = (gooBankroll * clanDivPercent) / 100,a_v
+gooBankroll -= (gooBankroll * (playerDivPercent + clanDivPercent)) / 100,a_w
+uint256 numClans = clans.totalSupply(),a_x
+uint256[] memory clanArmyPower = new uint256[](numClans),a_y
+uint256 todaysTotalClanPower,a_z
+clanArmyPower[i-1] = clans.clanTotalArmyPower(i),b_a
+todaysTotalClanPower += clanArmyPower[i-1],b_b
+i++,b_c
+"clans.depositGoo((allocatedClanWarFund * clanArmyPower[i-1]) / todaysTotalClanPower, i)",b_d
+nextSnapshotTime = now + 24 hours,b_e
+require(startSnapshot <= endSnapShot),b_f
+require(startSnapshot >= lastWarFundClaim[msg.sender]),b_g
+require(endSnapShot < allocatedWarFundSnapshots.length),b_h
+uint224 gooShare,b_i
+ArmyPower memory previousArmyPower = armyPowerSnapshots[msg.sender][lastWarFundClaim[msg.sender] - 1],b_j
+ArmyPower memory armyPowerDuringSnapshot = armyPowerSnapshots[msg.sender][i],b_k
+bool soldAllArmy = armyPowerZeroedSnapshots[msg.sender][i],b_l
+!soldAllArmy && armyPowerDuringSnapshot.attack == 0 && armyPowerDuringSnapshot.defense == 0,b_m
+armyPowerDuringSnapshot = previousArmyPower,b_n
+previousArmyPower = armyPowerDuringSnapshot,b_o
+gooShare += (allocatedWarFundSnapshots[i] * (armyPowerDuringSnapshot.attack + armyPowerDuringSnapshot.defense)) / totalArmyPowerSnapshots[i],b_p
+ArmyPower memory endSnapshotArmyPower = armyPowerSnapshots[msg.sender][endSnapShot],b_q
+endSnapshotArmyPower.attack == 0 && endSnapshotArmyPower.defense == 0 && !armyPowerZeroedSnapshots[msg.sender][endSnapShot] && (previousArmyPower.attack + previousArmyPower.defense) > 0,b_r
+armyPowerSnapshots[msg.sender][endSnapShot] = previousArmyPower,b_s
+lastWarFundClaim[msg.sender] = endSnapShot + 1,b_t
+"(uint224 clanFee, uint224 leaderFee, address leader, uint224 referalFee, address referer) = clans.getPlayerFees(msg.sender)",b_u
+clanFee > 0,b_v
+clanFee = (gooShare * clanFee) / 100,b_w
+leaderFee = (gooShare * leaderFee) / 100,b_x
+"clans.mintGoo(msg.sender, clanFee)",b_y
+"goo.mintGoo(leaderFee, leader)",b_z
+referer == address(0),c_a
+referalFee = 0,c_b
+referalFee > 0,c_c
+referalFee = (gooShare * referalFee) / 100,c_d
+"goo.mintGoo(referalFee, referer)",c_e
+"goo.mintGoo(gooShare - (clanFee + leaderFee + referalFee), msg.sender)",c_f
+snapshot = allocatedWarFundSnapshots.length,c_g
+a == 0,c_h
+return 0,c_i
+uint224 c = a * b,c_j
+assert(c / a == b),c_k
+return c,c_l
+uint256 c = a / b,c_m
+assert(b <= a),c_n
+return a - b,c_o
+uint256 c = a + b,c_p
+assert(c >= a),c_q
+uint224 c = a / b,c_r
+uint224 c = a + b,c_s

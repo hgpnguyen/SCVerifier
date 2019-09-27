@@ -1,0 +1,57 @@
+msg.value > 0,a
+"Deposit(msg.sender, msg.value)",b
+isOwner[_owners[i]] || _owners[i] == 0,c
+throw,d
+isOwner[_owners[i]] = true,e
+i++,f
+owners = _owners,g
+required = _required,h
+isOwner[owner] = true,i
+owners.push(owner),j
+OwnerAddition(owner),k
+isOwner[owner] = false,l
+owners[i] == owner,m
+owners[i] = owners[owners.length - 1],n
+break,o
+owners.length -= 1,p
+required > owners.length,q
+changeRequirement(owners.length),r
+OwnerRemoval(owner),s
+owners[i] = newOwner,t
+isOwner[newOwner] = true,u
+OwnerAddition(newOwner),v
+RequirementChange(_required),w
+"transactionId = addTransaction(destination, value, data)",x
+confirmTransaction(transactionId),y
+confirmations[transactionId][msg.sender] = true,z
+"Confirmation(msg.sender, transactionId)",a_a
+executeTransaction(transactionId),a_b
+confirmations[transactionId][msg.sender] = false,a_c
+"Revocation(msg.sender, transactionId)",a_d
+isConfirmed(transactionId),a_e
+Transaction tx = transactions[transactionId],a_f
+tx.executed = true,a_g
+tx.destination.call.value(tx.value)(tx.data),a_h
+Execution(transactionId),a_i
+ExecutionFailure(transactionId),a_j
+tx.executed = false,a_k
+uint count = 0,a_l
+confirmations[transactionId][owners[i]],a_m
+count += 1,a_n
+count == required,a_o
+return true,a_p
+transactionId = transactionCount,a_q
+"transactions[transactionId] = Transaction({\n            destination: destination,\n            value: value,\n            data: data,\n            executed: false\n        })",a_r
+transactionCount += 1,a_s
+Submission(transactionId),a_t
+pending && !transactions[i].executed\n                || executed && transactions[i].executed,a_u
+return owners,a_v
+address[] memory confirmationsTemp = new address[](owners.length),a_w
+uint i,a_x
+confirmationsTemp[count] = owners[i],a_y
+_confirmations = new address[](count),a_z
+_confirmations[i] = confirmationsTemp[i],b_a
+uint[] memory transactionIdsTemp = new uint[](transactionCount),b_b
+transactionIdsTemp[count] = i,b_c
+_transactionIds = new uint[](to - from),b_d
+_transactionIds[i - from] = transactionIdsTemp[i],b_e

@@ -1,0 +1,13 @@
+owner = msg.sender,a
+reward = msg.value,b
+locked = false,c
+diff = bytes32(11111),d
+msg.sender == owner,e
+locked,f
+throw,g
+owner.send(reward),h
+msg.data.length > 0,i
+sha256((msg.data)) < diff,j
+msg.sender.send(reward),k
+solution = msg.data,l
+locked = true,m

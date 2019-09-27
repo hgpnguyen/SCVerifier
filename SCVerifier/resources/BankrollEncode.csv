@@ -1,0 +1,29 @@
+owner = msg.sender,a
+require(msg.sender == owner),b
+clans = Clans(clansContract),c
+require(gooAllocation <= 100),d
+require(tokenAllocation <= 100),e
+require(gooAllocation + tokenAllocation <= 100),f
+gooPurchaseAllocation += (msg.value * gooAllocation) / 100,g
+tokenPurchaseAllocation += (msg.value * tokenAllocation) / 100,h
+gooBurner = GooBurnAlgo(config),i
+require(tokensAmount > 0),j
+require(clans.exists(clanId)),k
+address tokenAddress = clans.clanToken(clanId),l
+"require(ERC20(tokenAddress).transferFrom(owner, address(clans), tokensAmount))",m
+require(reimbursement >= tokenPurchaseAllocation),n
+tokenPurchaseAllocation -= reimbursement,o
+owner.transfer(reimbursement),p
+"emit TokenPurchase(tokenAddress, tokensAmount, reimbursement)",q
+require(newAllocation < (address(this).balance - tokenPurchaseAllocation)),r
+gooPurchaseAllocation = newAllocation,s
+require(newAllocation < (address(this).balance - gooPurchaseAllocation)),t
+tokenPurchaseAllocation = newAllocation,u
+require(msg.sender == gooToken),v
+uint256 payment = gooBurner.priceOf(amount),w
+require(payment <= gooPurchaseAllocation),x
+"ERC20(msg.sender).transferFrom(player, address(0), amount)",y
+gooPurchaseAllocation -= payment,z
+player.transfer(payment),a_a
+payment = (bankroll.gooPurchaseAllocation() * amount) / (goo.totalSupply() * 2),a_b
+gooPrice = bankroll.gooPurchaseAllocation() / (goo.totalSupply() * 2),a_c

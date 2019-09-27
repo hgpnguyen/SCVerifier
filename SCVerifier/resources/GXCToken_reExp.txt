@@ -1,0 +1,1 @@
+(a|#)bcd, ed, fg, hid, jkl, m, nopqr, stu, v, wxyza_aa_ba_c, a_d, a_ea_fa_ga_c, a_h, a_ia_ja_c, a_k(a_l|a_m)a_ja_c, za_na_oa_p, a_q, a_r, a_sa_ta_ua_va_w(a|#)(a_xa_y(a_z|#)b_a)*b_b, b_cxb_da_w(b_e|#)b_fb_g, b_hb_ib_j, b_kb_lb_mb_n, b_o, b_pb_qb_r, b_s, b_ta_ab_ub_va_c, b_w, b_x

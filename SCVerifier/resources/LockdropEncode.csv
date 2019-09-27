@@ -1,0 +1,21 @@
+"assembly {\n            sstore(0x00, owner)\n            sstore(0x01, unlockTime)\n        }",a
+"assembly {\n            switch gt(timestamp, sload(0x01))\n            case 0 { revert(0, 0) }\n            case 1 {\n                switch call(gas, sload(0x00), balance(address), 0, 0, 0, 0)\n                case 0 { revert(0, 0) }\n            }\n        }",b
+LOCK_START_TIME = startTime,c
+LOCK_END_TIME = startTime + LOCK_DROP_PERIOD,d
+uint256 eth = msg.value,e
+address owner = msg.sender,f
+uint256 unlockTime = unlockTimeForTerm(term),g
+"Lock lockAddr = (new Lock).value(eth)(owner, unlockTime)",h
+assert(address(lockAddr).balance == msg.value),i
+"emit Locked(owner, eth, lockAddr, term, edgewareAddr, isValidator, now)",j
+"emit Signaled(contractAddr, edgewareAddr, now)",k
+return now + 92 days,l
+return now + 183 days,m
+return now + 365 days,n
+revert(),o
+"return address(uint160(uint256(keccak256(abi.encodePacked(byte(0xd6), byte(0x94), _origin, byte(0x80))))))",p
+"return address(uint160(uint256(keccak256(abi.encodePacked(byte(0xd6), byte(0x94), _origin, uint8(_nonce))))))",q
+"return address(uint160(uint256(keccak256(abi.encodePacked(byte(0xd7), byte(0x94), _origin, byte(0x81), uint8(_nonce))))))",r
+"return address(uint160(uint256(keccak256(abi.encodePacked(byte(0xd8), byte(0x94), _origin, byte(0x82), uint16(_nonce))))))",s
+"return address(uint160(uint256(keccak256(abi.encodePacked(byte(0xd9), byte(0x94), _origin, byte(0x83), uint24(_nonce))))))",t
+"return address(uint160(uint256(keccak256(abi.encodePacked(byte(0xda), byte(0x94), _origin, byte(0x84), uint32(_nonce))))))",u

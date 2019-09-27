@@ -1,0 +1,1 @@
+[('', 'a'), ('', ''), ('setClans', 'bc'), ('depositEth', 'defgh'), ('updateGooBurnAlgo', 'bi'), ('refundTokenPurchase', 'bjklmnopq'), ('increaseGooPurchaseAllocation', 'brs'), ('increaseTokenPurchaseAllocation', 'btu'), ('receiveApproval', 'vwxyza_a'), ('', 'a'), ('priceOf', 'a_b'), ('price', 'a_c')]
