@@ -11,7 +11,7 @@ using namespace z3;
 using namespace std;
 
 
-void split(const string& str, vector<string>& result);
+void split(const string& str, vector<string>& result, char delim);
 
 enum Type { UINT, INT, BOOL, ADDRESS, BYTES, STRING };
 
@@ -26,14 +26,22 @@ struct ExpInfo {
 	bool isTrue;
 };
 
+struct SolEncode {
+	string encodeStr;
+	expr regEx;
+	~SolEncode() {};
+};
+
 struct Verifier {
 	int index;
 	string sourceCode;
-	vector<string> Lencode;
+	context ctx;
+	vector<SolEncode> Lencode;
 	map<string, string> encodeSol;
 	map<string, vector<string>> functionCodeList;
 	map<string, ExpInfo> expList;
 	typedef expr(Verifier::* pfunc) (expr l, expr r);
+
 
 	void checkSas(string exp) {
 		
@@ -83,6 +91,23 @@ struct Verifier {
 		cout << s.check();
 
 	}
+
+	void checkTrace(expr_vector traces) {
+		solver s(ctx);
+		for (auto i : Lencode) {
+			cout << removeCond(i.encodeStr) << " ";
+			expr str_val = ctx.string_val(removeCond(i.encodeStr));
+			s.push();
+			s.add(in_re(concat(traces), i.regEx));
+			if (s.check() == sat)
+				cout << sat << endl << s.get_model() << endl;
+			else
+				cout << s.check() << endl;
+			s.pop();
+		}
+
+	}
+
 private:
 
 	pair <expr, TypeInfo> convertToZ3(Json::Value exp, context& ctx, solver& s, map<string, pfunc> opConvert, Verifier& cToZ3) {
@@ -208,7 +233,7 @@ private:
 
 	string getCode(Json::Value ctx) {
 		vector<string> location;
-		split(ctx["src"].asString(), location);
+		split(ctx["src"].asString(), location, ':');
 		return sourceCode.substr(stoi(location[0]), stoi(location[1]));
 	}
 
@@ -261,6 +286,18 @@ private:
 			else extend(l, r.second.size - l.second.size);
 	}
 
+
+	string removeCond(string encodeStr) {
+		size_t start_pos = 0;
+		while ((start_pos = encodeStr.find('{', start_pos)) != string::npos) {
+			size_t end_pos = encodeStr.find('}', start_pos);
+			encodeStr.erase(start_pos, end_pos - start_pos + 1);
+		};
+		return encodeStr;
+	}
+
+	
+
 	expr add(expr l, expr r) { return l + r; }
 	expr minus(expr l, expr r) { return l - r; }
 	expr mul(expr l, expr r) { return l * r; }
@@ -286,7 +323,7 @@ private:
 	expr bvneg(expr sub, expr) { return ~sub; }
 };
 
-string convert(Json::Value ctx, Verifier& global); 
+SolEncode convert(Json::Value ctx, Verifier& global);
 string encode(string code, Verifier& global);
 string getCode(Json::Value ctx, Verifier& global);
 
@@ -311,14 +348,20 @@ Json::Value readJson(string filename) {
 	return root;
 }
 
+expr makeStringFunction(context* c, string s) {
+	z3::sort sort = c->string_sort();
+	symbol name = c->str_symbol(s.c_str());
+	return c->constant(name, sort);
+}
+
 void jsonScan(Json::Value root, Verifier& global) {
 	if (root.isObject()) {
 		if (!root.isMember("nodeType")) 
 			return;
 		else if (root["nodeType"] == "FunctionDefinition" && !root["body"].isNull()) {
-			string encode = convert(root["body"], global);
+			SolEncode encode = convert(root["body"], global);
 			global.Lencode.push_back(encode);
-			global.functionCodeList[root["name"].asString()].push_back(encode);
+			global.functionCodeList[root["name"].asString()].push_back(encode.encodeStr);
 			return;
 		}
 		for (auto i : root.getMemberNames()) {
@@ -333,19 +376,30 @@ void jsonScan(Json::Value root, Verifier& global) {
 	}
 }
 
-void split(const string& str, vector<string>& result) {
+void split(const string& str, vector<string>& result, char delim) {
 	stringstream ss(str);
 	std::string token;
-	while (getline(ss, token, ':')) {
+	while (getline(ss, token, delim)) {
 		result.push_back(token);
 	}
+}
+
+void split(const std::string& str, vector<string>& cont, string delim = " ")
+{
+	std::size_t current, previous = 0;
+	current = str.find(delim);
+	while (current != std::string::npos) {
+		cont.push_back(str.substr(previous, current - previous));
+		previous = current + delim.length();
+		current = str.find(delim, previous);
+	}
+	cont.push_back(str.substr(previous, current - previous));
 }
 
 
 string getCode(Json::Value ctx, Verifier& global) {
 	vector<string> location;
-	split(ctx["src"].asString(), location);
-	cout << global.sourceCode.substr(stoi(location[0]), stoi(location[1])) << endl;
+	split(ctx["src"].asString(), location, ':');
 	return global.sourceCode.substr(stoi(location[0]), stoi(location[1]));
 }
 
@@ -360,49 +414,68 @@ void addExp(Json::Value exp, string codeExcute, bool isTrue, Verifier& global) {
 	else global.expList[codeExp].codeActivates.push_back(codeExcute);
 }
 
-string block(Json::Value ctx, Verifier& global) {
-	string regularExp = "";
-	for (auto statement : ctx["statements"])
-		regularExp += convert(statement, global);
-	return regularExp;
+SolEncode block(Json::Value ctx, Verifier& global) {
+	string enStr = "";
+	expr_vector vec(global.ctx);
+	for (auto statement : ctx["statements"]) {
+		SolEncode en = convert(statement, global);
+		enStr += en.encodeStr;
+		vec.push_back(en.regEx);
+	}
+	return{ enStr, concat(vec) };
 }
 
-string ifStmt(Json::Value ctx, Verifier& global) {
+SolEncode ifStmt(Json::Value ctx, Verifier& global) {
+	SolEncode enTrue = convert(ctx["trueBody"], global);
 	string condition = getCode(ctx["condition"], global);
 	string elseCondition = "!(" + condition + ")";
-	string trueBody = convert(ctx["trueBody"], global);
-	string falseBody = !ctx["falseBody"].isNull() ? convert(ctx["falseBody"], global) : encode("#", global);
-	string regularExp = "({" + condition + "}" + trueBody + "|{" + elseCondition + "}" + falseBody + ")";
+	string trueBody = enTrue.encodeStr, falseBody;
+	expr regex(global.ctx);
+	if (ctx["falseBody"].isNull()) {
+		SolEncode enFalse = convert(ctx["trueBody"], global);
+		falseBody = enFalse.encodeStr;
+		regex = enTrue.regEx + enFalse.regEx;
+	}
+	else {
+		falseBody = encode("#", global);
+		regex = option(enTrue.regEx);
+	}
+	string enStr = "({" + condition + "}" + trueBody + "|{" + elseCondition + "}" + falseBody + ")";
 	addExp(ctx["condition"], trueBody, true, global);
 	addExp(ctx["condition"], falseBody, false, global);
-	return regularExp;
+
+	return{ enStr, regex };
 }
 
-string forStmt(Json::Value ctx, Verifier& global) {
-	string body = convert(ctx["body"], global);
-	string loopExp = convert(ctx["loopExpression"], global);
-	string regularExp = "(" + body + loopExp + ")*";
-	return regularExp;
+SolEncode forStmt(Json::Value ctx, Verifier& global) {
+	SolEncode body = convert(ctx["body"], global), lpExp = convert(ctx["loopExpression"], global);
+	string enStr = "(" + body.encodeStr + lpExp.encodeStr + ")*";
+	expr regex = star(concat(body.regEx, lpExp.regEx));
+	return{ enStr, regex };
 }
 
-string whileStmt(Json::Value ctx, Verifier& global) {
+SolEncode whileStmt(Json::Value ctx, Verifier& global) {
+	SolEncode body = convert(ctx["body"], global);
 	string condition = getCode(ctx["condition"], global);
-	string body = convert(ctx["body"], global);
-	string regularExp = "({" + condition + "}(" + body + ")*)";
-	addExp(ctx["condition"], body, true, global);
-	return regularExp;
+	string enStr = "({" + condition + "}(" + body.encodeStr + ")*)";
+	expr regex = star(body.regEx);
+	addExp(ctx["condition"], body.encodeStr, true, global);
+	return{ enStr, regex };
 }
 
-string doWhileStmt(Json::Value ctx, Verifier& global) {
+SolEncode doWhileStmt(Json::Value ctx, Verifier& global) {
 	//string condition = getCode(ctx["condition"], global);
-	string body = convert(ctx["body"], global);
-	string regularExp = "(" + body + ")+";
-	return regularExp;
+	SolEncode body = convert(ctx["body"], global);
+	string enStr = "(" + body.encodeStr + ")+";
+	expr regex = z3::plus(body.regEx);
+	return{ enStr, regex };
 }
 
-string otherStmt(Json::Value ctx, Verifier& global) {
+SolEncode otherStmt(Json::Value ctx, Verifier& global) {
 	string code = getCode(ctx, global);
-	return encode(code, global);
+	string enStr = encode(code, global);
+	expr regex = to_re(global.ctx.string_val(enStr));
+	return{ enStr, regex };
 }
 
 string encode(string code, Verifier& global) {
@@ -414,7 +487,6 @@ string encode(string code, Verifier& global) {
 	mod = index % 26;
 	div = index / 26;
 	encode_str = static_cast<char>(97 + mod);
-	cout << index << " " << mod << encode_str << endl;
 	while (div != 0) {
 		mod = div % 26;
 		mod = mod != 0 ? mod - 1 : mod;
@@ -428,9 +500,8 @@ string encode(string code, Verifier& global) {
 	return encode_str;
 }
 
-string convert(Json::Value ctx, Verifier& global) {
-	string regularExp;
-	typedef string (*pfunc)(Json::Value, Verifier& global);
+SolEncode convert(Json::Value ctx, Verifier& global) {
+	typedef SolEncode (*pfunc)(Json::Value, Verifier& global);
 	map<string, pfunc> switchCase;
 	switchCase["Block"] = block;
 	switchCase["ForStatement"] = forStmt;
@@ -440,8 +511,27 @@ string convert(Json::Value ctx, Verifier& global) {
 	string nodeType = ctx["nodeType"].asString();
 	auto func = switchCase.find(nodeType) != switchCase.end() ? switchCase[nodeType] : otherStmt;
 	//cout << ctx << endl;
-	regularExp = func(ctx, global);
+	SolEncode regularExp = func(ctx, global);
 	return regularExp;
+}
+
+expr_vector readTrace(string trace, context& ctx) {
+	vector <string> cont;
+	expr_vector vec(ctx);
+	unsigned int index = 1;
+	split(trace, cont, "->");
+	cout << "split " << endl;
+	for (auto i : cont) {
+		cout << i << endl;
+		expr exp(ctx);
+		if (i == "T") {
+			exp = makeStringFunction(&ctx, "T" + to_string(index));
+			index++;
+		}
+		else exp = ctx.string_val(i);
+		vec.push_back(exp);
+	}
+	return vec;
 }
 
 size_t find(string str, size_t from, map<char, string> m) {
@@ -463,6 +553,7 @@ std::string toRawStr(std::string str) {
 	return str;
 }
 
+
 int main() {
 	string smartContract = "test8", sourceCode;
 	Json::Value root;
@@ -476,14 +567,29 @@ int main() {
 	Verifier verifier;
 	verifier.sourceCode = rawStr;
 	verifier.index = 0;
+	verifier.ctx.set("timeout", 3000);
 	jsonScan(root, verifier);
 	for (auto i : verifier.Lencode)
-		cout << i << endl;
+		cout << i.encodeStr << " " << i.regEx  << endl;
 	for (auto j : extract_keys(verifier.expList)) {
 		cout << j << " ";
 		verifier.checkSas(j);
 		cout << endl;
 	}
+	// trace: T->a->T
+	/*expr t1 = makeStringFunction(&verifier.ctx, "t1");
+	expr t2 = makeStringFunction(&verifier.ctx, "t2");
+	expr a = verifier.ctx.string_val("a");*/
+	expr_vector vec = readTrace("T->cde->T", verifier.ctx);
+	cout << vec << endl;
+	/*vec.push_back(t1);
+	vec.push_back(a);
+	vec.push_back(t2);*/
+	verifier.checkTrace(vec);
 
+
+
+	system("pause");
 	return 0;
 }
+

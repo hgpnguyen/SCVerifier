@@ -1,9 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.29306.81
+# Visual Studio 14
+VisualStudioVersion = 14.0.25420.1
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SCVerifier", "SCVerifier\SCVerifier.vcxproj", "{04B27E48-8DAA-4557-9FE5-A950BC4199F5}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "VerTest", "VerTest\VerTest.vcxproj", "{7D69FE1D-EE1D-4238-8012-4AC9FF89511C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,6 +23,14 @@ Global
 		{04B27E48-8DAA-4557-9FE5-A950BC4199F5}.Release|x64.Build.0 = Release|x64
 		{04B27E48-8DAA-4557-9FE5-A950BC4199F5}.Release|x86.ActiveCfg = Release|Win32
 		{04B27E48-8DAA-4557-9FE5-A950BC4199F5}.Release|x86.Build.0 = Release|Win32
+		{7D69FE1D-EE1D-4238-8012-4AC9FF89511C}.Debug|x64.ActiveCfg = Debug|x64
+		{7D69FE1D-EE1D-4238-8012-4AC9FF89511C}.Debug|x64.Build.0 = Debug|x64
+		{7D69FE1D-EE1D-4238-8012-4AC9FF89511C}.Debug|x86.ActiveCfg = Debug|Win32
+		{7D69FE1D-EE1D-4238-8012-4AC9FF89511C}.Debug|x86.Build.0 = Debug|Win32
+		{7D69FE1D-EE1D-4238-8012-4AC9FF89511C}.Release|x64.ActiveCfg = Release|x64
+		{7D69FE1D-EE1D-4238-8012-4AC9FF89511C}.Release|x64.Build.0 = Release|x64
+		{7D69FE1D-EE1D-4238-8012-4AC9FF89511C}.Release|x86.ActiveCfg = Release|Win32
+		{7D69FE1D-EE1D-4238-8012-4AC9FF89511C}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
