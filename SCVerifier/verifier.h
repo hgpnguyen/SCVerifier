@@ -38,17 +38,23 @@ struct Verifier {
 	context ctx;
 	vector<SolEncode> Lencode;
 	map<string, string> encodeSol;
+	map<string, Json::Value> decodeSol;
 	map<string, vector<string>> functionCodeList;
 	map<string, ExpInfo> expList;
 	typedef expr(Verifier::* pfunc) (expr l, expr r);
 
 	void checkSas(string exp);
-	void checkTrace(expr_vector traces);
+	void checkTrace(string traces_str);
+	void checkCondofTrace(string traces_str, model m, expr_vector vars);
+	expr_vector readTrace(string trace);
 
 private:
 
-	pair <expr, TypeInfo> convertToZ3(Json::Value exp, context& ctx, solver& s, map<string, pfunc> opConvert, Verifier& cToZ3);
-	pair<expr, TypeInfo> getVar(Json::Value exp, context& ctx, solver& s, Verifier& cToZ3);
+	pair <expr, TypeInfo> convertToZ3(Json::Value exp, solver& s, map<string, pfunc> opConvert,
+		map<string, pair<TypeInfo, int>>& vars, bool increase = false);
+	expr getVar(string varname, TypeInfo type, solver& s);
+	expr getVal(string value, TypeInfo type, solver& s);
+	map<string, pfunc> getOpConvert();
 	TypeInfo getType(Json::Value exp);
 	string getCode(Json::Value ctx);
 	string encode(string code, Verifier& global);
@@ -56,6 +62,8 @@ private:
 	void extend(pair<expr, TypeInfo>& p, unsigned int i);
 	void preCheck(pair<expr, TypeInfo>& l, pair<expr, TypeInfo>& r, string op);
 	string removeCond(string encodeStr);
+	vector<string> getListofCode(string traces_str, model m, expr_vector vars);
+	
 
 	expr add(expr l, expr r) { return l + r; }
 	expr minus(expr l, expr r) { return l - r; }
