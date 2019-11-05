@@ -131,6 +131,12 @@
   <ItemGroup>
     <ClCompile Include="jsoncpp.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="utility.cpp" />
+    <ClCompile Include="verifier.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="utility.h" />
+    <ClInclude Include="verifier.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

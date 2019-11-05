@@ -6,6 +6,7 @@
 #include <iostream>
 #include <vector>
 #include <map>
+#include <stack>
 #include <cmath>
 #include "c++/z3++.h"
 #include "json/json.h"
@@ -34,6 +35,7 @@ SolEncode convert(Json::Value ctx, Verifier& global);
 string encode(string code, Verifier& global);
 size_t find(string str, size_t from, map<char, string> m);
 string toRawStr(std::string str);
+vector<string> infixToPostfix(string str_exp);
 expr_vector readTrace(string trace, context& ctx);
 
 template<typename TK, typename TV>

@@ -47,6 +47,7 @@ int main() {
 	string trace = "T->{x = 1}x = x + 1{x = 2}->T";
 	verifier.checkTrace(trace);
 
+
 	system("pause");
 	return 0;
 }

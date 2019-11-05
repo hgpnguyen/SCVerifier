@@ -36,19 +36,30 @@ void Verifier::checkTrace(string traces_str) {
 		expr str_val = ctx.string_val(removeCond(i.encodeStr));
 		s.push();
 		s.add(in_re(concat(traces), i.regEx));
-		if (s.check() == sat) {
+		z3::check_result isSat;
+		while ((isSat = s.check()) == sat) {
 			model m = s.get_model();
-			cout << sat << endl << m << endl;
-			checkCondofTrace(traces_str, m, traces);
+			cout << "Model: " << m << endl;
+			if (checkCondofTrace(traces_str, m, traces)) {
+				isSat = sat;
+				break;
+			}
+			else {
+				expr_vector orExp(ctx);
+				for (auto j : traces) {
+					if (j.is_const())
+						orExp.push_back(j != m.eval(j));
+				}
+				s.add(mk_or(orExp));
+			}
 		}
-		else
-			cout << s.check() << endl;
+		cout << isSat << endl;
 		s.pop();
 	}
 
 }
 
-void Verifier::checkCondofTrace(string traces_str, model m, expr_vector vars) {
+bool Verifier::checkCondofTrace(string traces_str, model m, expr_vector vars) {
 	vector <string> listCode = getListofCode(traces_str, m, vars);
 	map<string, pfunc> opConvert = getOpConvert();
 	map<string, pair<TypeInfo, int>> vars_m;
@@ -59,9 +70,18 @@ void Verifier::checkCondofTrace(string traces_str, model m, expr_vector vars) {
 			cout << expr.first << endl;
 			s.add(expr.first);
 		}
+		else if (decodeSol.find(i) == decodeSol.end()) {
+			increaseVar(s, vars_m);
+			expr exp = calculate(i, vars_m);
+			cout <<  exp << endl;
+			s.add(exp);
+		}
 	}
 	cout << "Solver: " << s << endl;
 	cout << s.check() << endl;
+	if (s.check() == sat)
+		return true;
+	else return false;
 }
 
 vector<string> Verifier::getListofCode(string traces_str, model m, expr_vector vars) {
@@ -69,13 +89,9 @@ vector<string> Verifier::getListofCode(string traces_str, model m, expr_vector v
 	expr_vector vec(ctx);
 	unsigned int index = 1;
 	split(traces_str, cont, "->");
-	for (auto i : cont)
-		cout << i << " ";
-	cout << endl;
 	for (int i = 0; i < cont.size(); i++) {
 		if (cont[i] == "T") {
 			string T = m.eval(vars[i]).get_string();
-			cout << "T: " << T << endl;
 			for (auto j : T)
 				result.push_back(string(1, j));
 		}
@@ -97,8 +113,6 @@ vector<string> Verifier::getListofCode(string traces_str, model m, expr_vector v
 
 		}
 	}
-	for (auto i : result)
-		cout << i << " ";
 	return result;
 }
 
@@ -148,28 +162,31 @@ pair <expr, TypeInfo> Verifier::convertToZ3(Json::Value exp, solver& s, map<stri
 		}
 		else {
 			string code = getCode(exp);
+			bool first = true;
 			int num = 0;
 			if (vars.find(code) == vars.end())
 				vars[code] = { type, 0 };
 			else {
 				if (increase)
 					vars[code].second++;
+				else first = false;
 				num = vars[code].second;
 			}
 			string varname = code + to_string(num);
-			return{ getVar(varname, type, s), type };
+			return{ getVar(varname, type, s, first), type };
 		}
 	}
 }
 
-expr Verifier::getVar(string varname, TypeInfo type, solver& s) {
+expr Verifier::getVar(string varname, TypeInfo type, solver& s, bool first) {
 	string var;
 
 	switch (type.type) {
 	case UINT:
 	{
 		expr a = ctx.int_const(varname.c_str());
-		s.add(a >= 0);
+		if (first)
+			s.add(a >= 0);
 		return a;
 	}
 	case INT:
@@ -332,6 +349,7 @@ expr_vector Verifier::readTrace(string trace) {
 
 map<string, Verifier::pfunc> Verifier::getOpConvert() {
 	map<string, pfunc> opConvert;
+	opConvert["="] = &Verifier::eq;
 	opConvert["=="] = &Verifier::eq;
 	opConvert["!="] = &Verifier::neq;
 	opConvert["||"] = &Verifier::orOp;
@@ -356,4 +374,73 @@ map<string, Verifier::pfunc> Verifier::getOpConvert() {
 	opConvert["u!"] = &Verifier::notOP;
 	opConvert["u~"] = &Verifier::bvneg;
 	return opConvert;
+}
+
+bool isOperator(string str) {
+	if (str.length() > 1)
+		return false;
+	if (str[0] >= 'a' && str[0] <= 'z' || str[0] >= 'A' && str[0] <= 'Z' || str[0] >= '0' && str[0] <= '9')
+		return false;
+	else return true;
+}
+
+expr Verifier::convertToExp(string str, map < string, pair<TypeInfo, int>> vars) {
+	solver s(ctx);
+	if (vars.find(str) != vars.end()) {
+		string varname = str + to_string(vars[str].second);
+		return getVar(varname, vars[str].first, s);
+	} else {
+		TypeInfo type;
+		if (str == "true" || str == "false")
+			type = { BOOL, 1 };
+		else if (str[0] >= '0' && str[0] <= '9')
+			type = { INT, 256 };
+		else cout << "ID not found" << endl;
+		return getVal(str, type, s);
+	}
+}
+
+expr Verifier::calculate(string exp, map < string, pair<TypeInfo, int>> vars) {
+	vector<string> postfix = infixToPostfix(exp);
+	map<string, pfunc> opConvert = getOpConvert();
+	opConvert["&"] = &Verifier::andOp;
+	opConvert["|"] = &Verifier::orOp;
+	stack<expr> st;
+	expr sub(ctx);
+	for (auto i : postfix) {
+		if (isOperator(i)) {
+			switch (i[0]) {
+			case '!': //Unary
+				sub = st.top();
+				st.pop();
+				st.push(!sub);
+				break;
+			default:  //Binary
+				expr r = st.top();
+				st.pop();
+				expr l = st.top();
+				st.pop();
+				pfunc op = opConvert[i];
+				expr exp = (this->*op)(l, r);
+				st.push(exp);
+				break;
+			}
+		}
+		else st.push(convertToExp(i, vars));
+	}
+	expr result = st.top();
+	st.pop();
+	if (!st.empty())
+		cout << "ERROR" << endl;
+	return result;
+}
+
+void Verifier::increaseVar(solver& s, map < string, pair<TypeInfo, int>>& vars) {
+	for (auto i : extract_keys(vars)) {
+		string oldVarname = i + to_string(vars[i].second), newVarname = i + to_string(vars[i].second + 1);
+		vars[i].second++;
+		expr old = getVar(oldVarname, vars[i].first, s);
+		expr newV = getVar(newVarname, vars[i].first, s, true);
+		s.add(old == newV);
+	}
 }

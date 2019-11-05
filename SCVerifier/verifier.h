@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <iostream>
 #include <vector>
+#include <stack>
 #include <map>
 #include <cmath>
 #include "c++/z3++.h"
@@ -45,14 +46,14 @@ struct Verifier {
 
 	void checkSas(string exp);
 	void checkTrace(string traces_str);
-	void checkCondofTrace(string traces_str, model m, expr_vector vars);
+	bool checkCondofTrace(string traces_str, model m, expr_vector vars);
 	expr_vector readTrace(string trace);
 
 private:
 
 	pair <expr, TypeInfo> convertToZ3(Json::Value exp, solver& s, map<string, pfunc> opConvert,
 		map<string, pair<TypeInfo, int>>& vars, bool increase = false);
-	expr getVar(string varname, TypeInfo type, solver& s);
+	expr getVar(string varname, TypeInfo type, solver& s, bool first = false);
 	expr getVal(string value, TypeInfo type, solver& s);
 	map<string, pfunc> getOpConvert();
 	TypeInfo getType(Json::Value exp);
@@ -63,7 +64,9 @@ private:
 	void preCheck(pair<expr, TypeInfo>& l, pair<expr, TypeInfo>& r, string op);
 	string removeCond(string encodeStr);
 	vector<string> getListofCode(string traces_str, model m, expr_vector vars);
-	
+	expr convertToExp(string str, map < string, pair<TypeInfo, int>> vars);
+	expr calculate(string exp, map < string, pair<TypeInfo, int>> vars);
+	void increaseVar(solver& s, map < string, pair<TypeInfo, int>>& vars);
 
 	expr add(expr l, expr r) { return l + r; }
 	expr minus(expr l, expr r) { return l - r; }

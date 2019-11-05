@@ -7,24 +7,13 @@ contract MyContract {
     }
     StructType s;
 
-    function add() public pure returns (uint) {
-        uint i; uint b;
-        int f;
-        int g = 10;
-        uint len;
-        bool a;
-        if(!a)
-            f = f + 5;
-        else if (g < 5)
-            f = f - 2;
-        else f = 5;
-        do{
-            g = g + 1;
-        } while (g < 15);
-        if (i > b) {
-            a = true;
-        }
-        return i;
+    function add() public pure {
+        uint y;
+        uint x;
+        y = 0;
+        x = y + 1;
+        x = x + 1;
+        x = x + 1;
     }
 
     function unsat() public pure returns (uint) {

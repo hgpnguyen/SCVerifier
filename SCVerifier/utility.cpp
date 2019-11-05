@@ -222,3 +222,69 @@ string toRawStr(std::string str) {
 	}
 	return str;
 }
+
+int prec(char c)
+{
+	switch (c) {
+	case '!':
+		return 11;
+	case '^':
+		return 10;
+	case '*': case '/': case '%':
+		return 9;
+	case '+': case '-':
+		return 8;
+	case '<': case '>':
+		return 7;
+	case '&':
+		return 5;
+	case '|':
+		return 4;
+	case '=':
+		return 1;
+	default:
+		return -1;
+	}
+}
+
+vector<string> infixToPostfix(string str_exp) {
+	vector<string> cont, result;
+	stack<char> st;
+	st.push('N');
+	split(str_exp, cont, ' ');
+	for (auto i : cont) {
+		switch(i[0]) {
+		case '(':
+			st.push('(');
+			break;
+		case ')':
+			while (st.top() != 'N' && st.top() != '(') {
+				char temp = st.top();
+				st.pop();
+				result.push_back(string(1,temp));
+			}
+			if (st.top() == '(')
+				st.pop();
+			break;
+		case '+': case '-': case '*': case '/': case '=': case '%':
+		case '&': case '|': case '<': case '>': case '^': case '!':
+			while (st.top() != 'N' && prec(i[0]) <= prec(st.top()))
+			{
+				char temp = st.top();
+				st.pop();
+				result.push_back(string(1, temp));
+			}
+			st.push(i[0]);
+			break;
+		default:
+			result.push_back(i);
+			break;
+		}
+	}
+	while (st.top() != 'N') {
+		char temp = st.top();
+		st.pop();
+		result.push_back(string(1, temp));
+	}
+	return result;
+}
