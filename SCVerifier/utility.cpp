@@ -223,68 +223,114 @@ string toRawStr(std::string str) {
 	return str;
 }
 
-int prec(char c)
+int prec(string op)
 {
-	switch (c) {
-	case '!':
-		return 11;
-	case '^':
-		return 10;
-	case '*': case '/': case '%':
-		return 9;
-	case '+': case '-':
-		return 8;
-	case '<': case '>':
-		return 7;
-	case '&':
-		return 5;
-	case '|':
-		return 4;
-	case '=':
-		return 1;
-	default:
-		return -1;
+	map<string, int> switchPrec;
+	switchPrec["!"] = 11;
+	switchPrec["**"] = 10;
+	switchPrec["*"] = 9; switchPrec["/"] = 9; switchPrec["%"] = 9;
+	switchPrec["+"] = 8; switchPrec["-"] = 8;
+	switchPrec["<<"] = 7; switchPrec[">>"] = 7;
+	switchPrec["&"] = 6;
+	switchPrec["^"] = 5;
+	switchPrec["|"] = 4;
+	switchPrec["<"] = 3; switchPrec[">"] = 3; switchPrec["<="] = 3; switchPrec[">="] = 3;
+	switchPrec["=="] = 2; switchPrec["!="] = 2;
+	switchPrec["&&"] = 1; switchPrec["||"] = 1;
+	
+	if (switchPrec.find(op) != switchPrec.end())
+		return switchPrec[op];
+	else return -1;
+
+
+}
+
+bool checkChar(char c) { // Check if char is a special character
+	if (!(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'))
+		return true;
+	return false;
+}
+
+vector<string> splitExp(string str_exp) { // split exp string into mutiple components
+	vector<string> cont;
+	unsigned int start = 0;
+	string op, temp;
+	string op2letter[] = {"==", "&&", "||", "<=", ">=", "**", "!=", "<<", ">>"};
+	char op1letter[] = { '+', '-', '*', '/', '%', '!', '~', '&', '|', '^', '<', '>', '(', ')' };
+	int op2size = sizeof(op2letter)/ sizeof(*op2letter);
+	int op1size = sizeof(op1letter) / sizeof(*op1letter);
+	for (int i = 0; i < str_exp.size(); ++i) {
+		// find operator in string and split it
+		op = "";
+		if (checkChar(str_exp[i])) {
+			if (checkChar(str_exp[i + 1])) {
+				if (find(op2letter, op2letter + op2size, str_exp.substr(i, 2)) != op2letter + op2size) 
+					op = str_exp.substr(i, 2);
+				else if(find(op1letter, op1letter + op1size, str_exp[i]) != op1letter + op1size)
+					op  = string(1, str_exp[i]);
+			}
+			else {
+				if (find(op1letter, op1letter + op1size, str_exp[i]) != op1letter + op1size)
+					op = string(1, str_exp[i]);
+			}
+		}
+		if (op != "") {
+			temp = str_exp.substr(start, i - start);
+			temp.erase(remove_if(temp.begin(), temp.end(), ::isspace), temp.end());
+			if (temp != "")
+				cont.push_back(temp);
+			cont.push_back(op);
+			start = i + op.size();
+			i += op.size() - 1;
+		}
 	}
+	temp = str_exp.substr(start, str_exp.size()
+		- start);
+	temp.erase(remove_if(temp.begin(), temp.end(), ::isspace), temp.end());
+	if (temp != "")
+		cont.push_back(temp);
+	return cont;
 }
 
 vector<string> infixToPostfix(string str_exp) {
 	vector<string> cont, result;
-	stack<char> st;
-	st.push('N');
-	split(str_exp, cont, ' ');
+	stack<string> st;
+	cont = splitExp(str_exp);
 	for (auto i : cont) {
 		switch(i[0]) {
 		case '(':
-			st.push('(');
+			st.push("(");
 			break;
 		case ')':
-			while (st.top() != 'N' && st.top() != '(') {
-				char temp = st.top();
+			while (!st.empty() && st.top() != "(") {
+				string temp = st.top();
+				cout << temp << endl;
 				st.pop();
-				result.push_back(string(1,temp));
+				result.push_back(temp);
 			}
-			if (st.top() == '(')
+			if (!st.empty() && st.top() == "(") 
 				st.pop();
+		
 			break;
 		case '+': case '-': case '*': case '/': case '=': case '%':
 		case '&': case '|': case '<': case '>': case '^': case '!':
-			while (st.top() != 'N' && prec(i[0]) <= prec(st.top()))
+			while (!st.empty() && prec(i) <= prec(st.top()))
 			{
-				char temp = st.top();
+				string temp = st.top();
 				st.pop();
-				result.push_back(string(1, temp));
+				result.push_back(temp);
 			}
-			st.push(i[0]);
+			st.push(i);
 			break;
 		default:
 			result.push_back(i);
 			break;
 		}
 	}
-	while (st.top() != 'N') {
-		char temp = st.top();
+	while (!st.empty()) {
+		string temp = st.top();
 		st.pop();
-		result.push_back(string(1, temp));
+		result.push_back(temp);
 	}
 	return result;
 }

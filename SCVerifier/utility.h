@@ -37,6 +37,7 @@ size_t find(string str, size_t from, map<char, string> m);
 string toRawStr(std::string str);
 vector<string> infixToPostfix(string str_exp);
 expr_vector readTrace(string trace, context& ctx);
+vector<string> splitExp(string str_exp);
 
 template<typename TK, typename TV>
 vector<TK> extract_keys(std::map<TK, TV> const& input_map) {

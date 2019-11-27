@@ -377,8 +377,6 @@ map<string, Verifier::pfunc> Verifier::getOpConvert() {
 }
 
 bool isOperator(string str) {
-	if (str.length() > 1)
-		return false;
 	if (str[0] >= 'a' && str[0] <= 'z' || str[0] >= 'A' && str[0] <= 'Z' || str[0] >= '0' && str[0] <= '9')
 		return false;
 	else return true;
@@ -395,7 +393,7 @@ expr Verifier::convertToExp(string str, map < string, pair<TypeInfo, int>> vars)
 			type = { BOOL, 1 };
 		else if (str[0] >= '0' && str[0] <= '9')
 			type = { INT, 256 };
-		else cout << "ID not found" << endl;
+		else cout << "ID not found:" << str << endl;
 		return getVal(str, type, s);
 	}
 }
@@ -403,19 +401,19 @@ expr Verifier::convertToExp(string str, map < string, pair<TypeInfo, int>> vars)
 expr Verifier::calculate(string exp, map < string, pair<TypeInfo, int>> vars) {
 	vector<string> postfix = infixToPostfix(exp);
 	map<string, pfunc> opConvert = getOpConvert();
-	opConvert["&"] = &Verifier::andOp;
-	opConvert["|"] = &Verifier::orOp;
 	stack<expr> st;
 	expr sub(ctx);
 	for (auto i : postfix) {
+		cout << i << " ";
 		if (isOperator(i)) {
-			switch (i[0]) {
-			case '!': //Unary
+			if (i == "!") {
+				//Unary
 				sub = st.top();
 				st.pop();
 				st.push(!sub);
 				break;
-			default:  //Binary
+			}
+			else {  //Binary
 				expr r = st.top();
 				st.pop();
 				expr l = st.top();
@@ -425,6 +423,7 @@ expr Verifier::calculate(string exp, map < string, pair<TypeInfo, int>> vars) {
 				st.push(exp);
 				break;
 			}
+			
 		}
 		else st.push(convertToExp(i, vars));
 	}

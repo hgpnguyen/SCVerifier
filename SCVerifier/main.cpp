@@ -44,11 +44,15 @@ int main() {
 		cout << endl;
 	}*/
 	// trace: T->a->T
-	string trace = "T->{x = 1}x = x + 1{x = 2}->T";
+	string trace = "T->{x == 1}x = x + 1{x > 2}->T";
 	verifier.checkTrace(trace);
 
+	/*string exp = "x <= 2";
+	auto cont = splitExp(exp);
+	for (auto i : cont)
+		cout << i << " ";
+	cout << endl;*/
 
-	system("pause");
 	return 0;
 }
 
