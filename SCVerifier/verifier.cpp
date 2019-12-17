@@ -336,8 +336,15 @@ expr_vector Verifier::readTrace(string trace) {
 			split(i, cont2, ';');
 			string result = "";
 			for (auto j : cont2) {
-				j = encode(j, *this);
-				result += j;
+				ANTLRInputStream input(j + ";");
+				SolidityLexer lexer(&input);
+				CommonTokenStream tokens(&lexer);
+				SolidityParser parser(&tokens);
+				SolidityParser::StatementContext* tree = parser.statement();
+				Visitor visitor;
+				string code = visitor.visitStatement(tree).as<string>();
+				code = encode(code, *this);
+				result += code;
 			}
 			exp = ctx.string_val(result);
 
@@ -399,6 +406,7 @@ expr Verifier::convertToExp(string str, map < string, pair<TypeInfo, int>> vars)
 }
 
 expr Verifier::calculate(string exp, map < string, pair<TypeInfo, int>> vars) {
+	cout << "EXP: " << exp << endl;
 	vector<string> postfix = infixToPostfix(exp);
 	map<string, pfunc> opConvert = getOpConvert();
 	stack<expr> st;

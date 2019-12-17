@@ -12,19 +12,19 @@ contract MyContract {
         uint x;
         y = 0;
         x = y + 1;
-        x = x + 1;
+        if(true)
+            x = x + 1;
         x = x + 1;
     }
 
     function unsat() public pure returns (uint) {
         uint a; uint b;
-        if ((a + 10 + b) < 0)
-            b = 10;
-        bool c; bool d;
-        if (c || d && true)
-            c = false;
-        if (c && false)
-            a = b + 8;
+        uint c;
+        a = a + 10 - b * 25;
+        b += a - 10 / 2;
+        c = 104;
+        if(c == 20)
+            a = a + 5;
     }
 
     function Test() public pure {

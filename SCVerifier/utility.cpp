@@ -65,8 +65,10 @@ void split(const std::string& str, vector<string>& cont, string delim)
 string getCode(Json::Value ctx, Verifier& global) {
 	vector<string> location;
 	split(ctx["src"].asString(), location, ':');
-	cout << global.sourceCode.substr(stoi(location[0]), stoi(location[1])) << endl;
-	return global.sourceCode.substr(stoi(location[0]), stoi(location[1]));
+	string result = global.sourceCode.substr(stoi(location[0]), stoi(location[1]));
+	result.erase(remove_if(result.begin(), result.end(), ::isspace), result.end());
+	cout << result << endl;
+	return result;
 }
 
 void addExp(Json::Value exp, string codeExcute, bool isTrue, Verifier& global) {
@@ -138,6 +140,52 @@ SolEncode doWhileStmt(Json::Value ctx, Verifier& global) {
 	return{ enStr, regex };
 }
 
+SolEncode expressionStmt(Json::Value ctx, Verifier& global) {
+	if (ctx["expression"]["nodeType"] == "Assignment") {
+		if (assignment(ctx["expression"], global)) {
+			string code = "a=a+n";
+			cout << code << endl;
+			string enStr = encode(code, global);
+			expr regex = to_re(global.ctx.string_val(enStr));
+			if (global.decodeSol.find(enStr) == global.decodeSol.end())
+				global.decodeSol[enStr] = ctx;
+			return{ enStr, regex };
+		}
+		return otherStmt(ctx, global);
+	}
+	else return otherStmt(ctx, global);
+}
+
+bool assignment(Json::Value ctx, Verifier& global) {
+	string leftCode = getCode(ctx["leftHandSide"], global);
+	if (ctx["operator"] == "+=" || ctx["operator"] == "-=")
+		return true;
+	if (ctx["rightHandSide"]["nodeType"] == "BinaryOperation") {
+		return expression(ctx["rightHandSide"], global, leftCode);
+	}
+	else return false;
+}
+
+bool expression(Json::Value ctx, Verifier& global, string leftId) {
+	if (ctx["nodeType"] == "BinaryOperation") {
+		string op = ctx["operator"].asString();
+		if (op != "+" && op != "-")
+			return false;
+		bool left = expression(ctx["leftExpression"], global, leftId);
+		if (left)
+			return true;
+		bool right = expression(ctx["rightExpression"], global, leftId);
+		return right;
+	}
+
+	if (ctx["nodeType"] == "UnaryOperation")
+		return expression(ctx["expression"], global, leftId);
+
+	return getCode(ctx, global) == leftId ? true : false;
+
+
+}
+
 SolEncode otherStmt(Json::Value ctx, Verifier& global) {
 	string code = getCode(ctx, global);
 	string enStr = encode(code, global);
@@ -177,9 +225,9 @@ SolEncode convert(Json::Value ctx, Verifier& global) {
 	switchCase["IfStatement"] = ifStmt;
 	switchCase["WhileStatement"] = whileStmt;
 	switchCase["DoWhileStatement"] = doWhileStmt;
+	switchCase["ExpressionStatement"] = expressionStmt;
 	string nodeType = ctx["nodeType"].asString();
 	auto func = switchCase.find(nodeType) != switchCase.end() ? switchCase[nodeType] : otherStmt;
-	//cout << ctx << endl;
 	SolEncode regularExp = func(ctx, global);
 	return regularExp;
 }

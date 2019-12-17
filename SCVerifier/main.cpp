@@ -8,9 +8,14 @@
 #include "json/json.h."
 #include "utility.h"
 #include "verifier.h"
+#include "antlr4-runtime.h"
+#include "SolidityLexer.h"
+#include "SolidityParser.h"
+#include "Visitor.h"
 
 using namespace z3;
 using namespace std;
+using namespace antlr4;
 
 
 void test(string trace, Verifier& ver) {
@@ -52,6 +57,8 @@ int main() {
 	for (auto i : cont)
 		cout << i << " ";
 	cout << endl;*/
+
+
 
 	return 0;
 }

@@ -10,9 +10,14 @@
 #include <cmath>
 #include "c++/z3++.h"
 #include "json/json.h"
+#include "antlr4-runtime.h"
+#include "SolidityLexer.h"
+#include "SolidityParser.h"
+#include "Visitor.h"
 
 using namespace std;
 using namespace z3;
+using namespace antlr4;
 
 enum Type { UINT, INT, BOOL, ADDRESS, BYTES, STRING };
 
