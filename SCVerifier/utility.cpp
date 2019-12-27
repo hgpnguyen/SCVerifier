@@ -127,7 +127,7 @@ SolEncode whileStmt(Json::Value ctx, Verifier& global) {
 	SolEncode body = convert(ctx["body"], global);
 	string condition = getCode(ctx["condition"], global);
 	string enStr = "({" + condition + "}(" + body.encodeStr + ")*)";
-	expr regex = star(body.regEx);
+	expr regex = body.regEx.loop(0, 10);
 	addExp(ctx["condition"], body.encodeStr, true, global);
 	return{ enStr, regex };
 }
@@ -136,7 +136,7 @@ SolEncode doWhileStmt(Json::Value ctx, Verifier& global) {
 	//string condition = getCode(ctx["condition"], global);
 	SolEncode body = convert(ctx["body"], global);
 	string enStr = "(" + body.encodeStr + ")+";
-	expr regex = z3::plus(body.regEx);
+	expr regex = body.regEx.loop(1, 10);
 	return{ enStr, regex };
 }
 
@@ -217,6 +217,7 @@ string encode(string code, Verifier& global) {
 	return encode_str;
 }
 
+
 SolEncode convert(Json::Value ctx, Verifier& global) {
 	typedef SolEncode(*pfunc)(Json::Value, Verifier& global);
 	map<string, pfunc> switchCase;
@@ -225,7 +226,6 @@ SolEncode convert(Json::Value ctx, Verifier& global) {
 	switchCase["IfStatement"] = ifStmt;
 	switchCase["WhileStatement"] = whileStmt;
 	switchCase["DoWhileStatement"] = doWhileStmt;
-	switchCase["ExpressionStatement"] = expressionStmt;
 	string nodeType = ctx["nodeType"].asString();
 	auto func = switchCase.find(nodeType) != switchCase.end() ? switchCase[nodeType] : otherStmt;
 	SolEncode regularExp = func(ctx, global);

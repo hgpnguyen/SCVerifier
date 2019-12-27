@@ -31,32 +31,123 @@ void Verifier::checkTrace(string traces_str) {
 	expr_vector traces = readTrace(traces_str);
 	cout << "Trace: " << traces << endl;
 	solver s(ctx);
+	map<string, string> encodeDict;
+	int index = 0;
 	for (auto i : Lencode) {
 		cout << removeCond(i.encodeStr) << " ";
-		expr str_val = ctx.string_val(removeCond(i.encodeStr));
 		s.push();
-		s.add(in_re(concat(traces), i.regEx));
-		z3::check_result isSat;
-		while ((isSat = s.check()) == sat) {
-			model m = s.get_model();
-			cout << "Model: " << m << endl;
-			if (checkCondofTrace(traces_str, m, traces)) {
-				isSat = sat;
+		expr_vector vec = getAllPath(i.regEx);
+		z3::check_result isSat = unsat;
+		for (auto path : vec) {
+			cout << path.get_string() << endl;
+			cout << "Generalization: " << generalization(path, encodeDict, index) << endl;;
+			isSat = checkOnePath(traces, path, traces_str);
+			if (isSat == sat)
 				break;
-			}
-			else {
-				expr_vector orExp(ctx);
-				for (auto j : traces) {
-					if (j.is_const())
-						orExp.push_back(j != m.eval(j));
-				}
-				s.add(mk_or(orExp));
-			}
 		}
 		cout << isSat << endl;
 		s.pop();
 	}
 
+}
+
+expr_vector Verifier::getAllPath(expr exp) {
+	solver s(ctx);
+	expr str_const = makeStringFunction(&ctx, "T");
+	s.add(in_re(str_const, exp));
+	expr_vector vec(ctx);
+	while (s.check() == sat) {
+		model m = s.get_model();
+		expr val = m.eval(str_const);
+		vec.push_back(val);
+		s.add(str_const != val);
+	}
+	return vec;
+}
+
+check_result Verifier::checkOnePath(expr_vector trace, expr path, string traces_str) {
+	solver s(ctx);
+	s.add(concat(trace) == path);
+	while (s.check() == sat) {
+		model m = s.get_model();
+		if (checkCondofTrace(traces_str, m, trace)) {
+			return sat;
+		}
+		else {
+			expr_vector orExp(ctx);
+			for (auto j : trace) {
+				if (j.is_const())
+					orExp.push_back(j != m.eval(j));
+			}
+			s.add(mk_or(orExp));
+		}
+	}
+	return unsat;
+}
+
+expr Verifier::generalization(expr path, map<string, string>& encodeDict, int& index) {
+	vector<string> splitPath;
+	string strPath = path.get_string();
+	expr_vector newPath(ctx);
+	for (int i = 0; i < strPath.length(); i++)
+		if (strPath[i] != '_')
+			splitPath.push_back(string(1, strPath[i]));
+		else
+			splitPath.back() += strPath.substr(i++, 2);
+	for (auto i : splitPath) {
+		Json::Value decode = decodeSol[i];
+		SolEncode temp = statementEncode(decode, encodeDict, index);
+		newPath.push_back(temp.regEx);
+	}
+	//newPath.push_back(to_re(ctx.string_val("a")));
+	//newPath.push_back(to_re(ctx.string_val("b")));
+	expr result = concat(newPath);
+	return result;
+
+}
+
+SolEncode Verifier::statementEncode(Json::Value c, map<string, string>& encodeDict, int& index) {
+	if (c["nodeType"] == "ExpressionStatement" && c["expression"]["nodeType"] == "Assignment" && assignment(c["expression"])) {
+		string code = "a=a+n";
+		cout << code << endl;
+		string enStr = encode(code, encodeDict, index);
+		expr regex = ctx.string_val(enStr);
+		return{ enStr, regex };
+	}
+	else {
+		string code = getCode(c);
+		string enStr = encode(code, encodeDict, index);
+		expr regex = ctx.string_val(enStr);
+		return{ enStr, regex };
+	}
+}
+
+bool Verifier::assignment(Json::Value ctx) {
+	string leftCode = getCode(ctx["leftHandSide"]);
+	if (ctx["operator"] == "+=" || ctx["operator"] == "-=")
+		return true;
+	if (ctx["rightHandSide"]["nodeType"] == "BinaryOperation") {
+		return expression(ctx["rightHandSide"], leftCode);
+	}
+	else return false;
+}
+
+bool Verifier::expression(Json::Value ctx, string leftId) {
+	if (ctx["nodeType"] == "BinaryOperation") {
+		string op = ctx["operator"].asString();
+		if (op != "+" && op != "-")
+			return false;
+		bool left = expression(ctx["leftExpression"], leftId);
+		if (left)
+			return true;
+		bool right = expression(ctx["rightExpression"], leftId);
+		return right;
+	}
+
+	if (ctx["nodeType"] == "UnaryOperation")
+		return expression(ctx["expression"], leftId);
+
+	return getCode(ctx) == leftId ? true : false;
 }
 
 bool Verifier::checkCondofTrace(string traces_str, model m, expr_vector vars) {
@@ -260,26 +351,26 @@ string Verifier::getCode(Json::Value ctx) {
 	return sourceCode.substr(stoi(location[0]), stoi(location[1]));
 }
 
-string Verifier::encode(string code, Verifier& global) {
-	if (global.encodeSol.find(code) != global.encodeSol.end())
-		return global.encodeSol[code];
-	int& index = global.index;
-	int mod, div;
-	string encode_str;
-	mod = index % 26;
-	div = index / 26;
-	encode_str = static_cast<char>(97 + mod);
-	while (div != 0) {
-		mod = div % 26;
-		mod = mod != 0 ? mod - 1 : mod;
-		div = div / 26;
-		string temp(1, static_cast<char>(97 + mod));
-		encode_str += "_" + temp;
-	}
-	index++;
-	global.encodeSol[code] = encode_str;
+string Verifier::encode(string code, map<string, string> & encodeDict, int& i) {
+		if (encodeDict.find(code) != encodeDict.end())
+			return encodeDict[code];
+		int& index = i;
+		int mod, div;
+		string encode_str;
+		mod = index % 26;
+		div = index / 26;
+		encode_str = static_cast<char>(97 + mod);
+		while (div != 0) {
+			mod = div % 26;
+			mod = mod != 0 ? mod - 1 : mod;
+			div = div / 26;
+			string temp(1, static_cast<char>(97 + mod));
+			encode_str = encode_str + "_" + temp;
+		}
+		index++;
+		encodeDict[code] = encode_str;
 
-	return encode_str;
+		return encode_str;
 }
 
 void Verifier::int2Bv(pair<expr, TypeInfo>& p, int size) {
@@ -336,14 +427,14 @@ expr_vector Verifier::readTrace(string trace) {
 			split(i, cont2, ';');
 			string result = "";
 			for (auto j : cont2) {
-				ANTLRInputStream input(j + ";");
+				/*ANTLRInputStream input(j + ";");
 				SolidityLexer lexer(&input);
 				CommonTokenStream tokens(&lexer);
 				SolidityParser parser(&tokens);
 				SolidityParser::StatementContext* tree = parser.statement();
 				Visitor visitor;
-				string code = visitor.visitStatement(tree).as<string>();
-				code = encode(code, *this);
+				string code = visitor.visitStatement(tree).as<string>();*/
+				string code = encode(j, encodeSol, (*this).index);
 				result += code;
 			}
 			exp = ctx.string_val(result);

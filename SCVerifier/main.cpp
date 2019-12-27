@@ -49,7 +49,7 @@ int main() {
 		cout << endl;
 	}*/
 	// trace: T->a->T
-	string trace = "T->{x == 1}x = x + 1{x > 2}->T";
+	string trace = "T->{x == 2}x=x+1{x >= 3}->T";
 	verifier.checkTrace(trace);
 
 	/*string exp = "x <= 2";

@@ -17,6 +17,7 @@ using namespace z3;
 
 SolEncode convert(Json::Value ctx, Verifier& global);
 string encode(string code, Verifier& global);
+string encode(string code, map<string, string>& encodeDict, int& index);
 string getCode(Json::Value ctx, Verifier& global);
 Json::Value readJson(string filename);
 expr makeStringFunction(context* c, string s);

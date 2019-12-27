@@ -49,6 +49,7 @@ struct Verifier {
 	map<string, ExpInfo> expList;
 	typedef expr(Verifier::* pfunc) (expr l, expr r);
 
+
 	void checkSas(string exp);
 	void checkTrace(string traces_str);
 	bool checkCondofTrace(string traces_str, model m, expr_vector vars);
@@ -63,7 +64,7 @@ private:
 	map<string, pfunc> getOpConvert();
 	TypeInfo getType(Json::Value exp);
 	string getCode(Json::Value ctx);
-	string encode(string code, Verifier& global);
+	string encode(string code, map<string, string>& encodeDict, int& index);
 	void int2Bv(pair<expr, TypeInfo>& p, int size = NULL);
 	void extend(pair<expr, TypeInfo>& p, unsigned int i);
 	void preCheck(pair<expr, TypeInfo>& l, pair<expr, TypeInfo>& r, string op);
@@ -72,6 +73,12 @@ private:
 	expr convertToExp(string str, map < string, pair<TypeInfo, int>> vars);
 	expr calculate(string exp, map < string, pair<TypeInfo, int>> vars);
 	void increaseVar(solver& s, map < string, pair<TypeInfo, int>>& vars);
+	expr_vector getAllPath(expr exp);
+	check_result checkOnePath(expr_vector traces, expr path, string traces_string);
+	expr generalization(expr path, map<string, string>& encodeDict, int& index);
+	SolEncode statementEncode(Json::Value ctx, map<string, string>& encodeDict, int& index);
+	bool assignment(Json::Value ctx);
+	bool expression(Json::Value ctx, string leftId);
 
 	expr add(expr l, expr r) { return l + r; }
 	expr minus(expr l, expr r) { return l - r; }
