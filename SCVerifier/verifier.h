@@ -52,8 +52,8 @@ struct Verifier {
 
 	void checkSas(string exp);
 	void checkTrace(string traces_str);
-	bool checkCondofTrace(string traces_str, model m, expr_vector vars);
-	expr_vector readTrace(string trace);
+	bool checkCondofTrace(string traces_str, model m, expr_vector vars, string path);
+	expr_vector readTrace(string trace, map<string, string>& encodeDict, int& index);
 
 private:
 
@@ -69,12 +69,12 @@ private:
 	void extend(pair<expr, TypeInfo>& p, unsigned int i);
 	void preCheck(pair<expr, TypeInfo>& l, pair<expr, TypeInfo>& r, string op);
 	string removeCond(string encodeStr);
-	vector<string> getListofCode(string traces_str, model m, expr_vector vars);
+	vector<pair<string, int>> getConstraints(string traces_str, model m, expr_vector vars);
 	expr convertToExp(string str, map < string, pair<TypeInfo, int>> vars);
 	expr calculate(string exp, map < string, pair<TypeInfo, int>> vars);
 	void increaseVar(solver& s, map < string, pair<TypeInfo, int>>& vars);
 	expr_vector getAllPath(expr exp);
-	check_result checkOnePath(expr_vector traces, expr path, string traces_string);
+	check_result checkOnePath(expr_vector traces, expr path, string traces_string, string ungenPath);
 	expr generalization(expr path, map<string, string>& encodeDict, int& index);
 	SolEncode statementEncode(Json::Value ctx, map<string, string>& encodeDict, int& index);
 	bool assignment(Json::Value ctx);

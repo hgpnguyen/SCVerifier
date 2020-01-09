@@ -1,5 +1,4 @@
 #include "utility.h"
-#include <fstream>
 
 
 Json::Value readJson(string filename) {
@@ -340,6 +339,7 @@ vector<string> splitExp(string str_exp) { // split exp string into mutiple compo
 	return cont;
 }
 
+
 vector<string> infixToPostfix(string str_exp) {
 	vector<string> cont, result;
 	stack<string> st;
@@ -381,4 +381,35 @@ vector<string> infixToPostfix(string str_exp) {
 		result.push_back(temp);
 	}
 	return result;
+}
+
+map<string, pfunc> getOpConvert()
+{
+	map<string, pfunc> opConvert;
+	opConvert["="] = eq;
+	opConvert["=="] = eq;
+	opConvert["!="] = neq;
+	opConvert["||"] = orOp;
+	opConvert["&&"] = andOp;
+	opConvert["**"] = exp;
+	opConvert["<"] = lt;
+	opConvert["<="] = le;
+	opConvert[">"] = gt;
+	opConvert[">="] = ge;
+	opConvert["u<"] = ult;
+	opConvert["u<="] = ule;
+	opConvert["u>"] = ugt;
+	opConvert["u>="] = uge;
+	opConvert["+"] = add;
+	opConvert["-"] = minusUti;
+	opConvert["*"] = mul;
+	opConvert["/"] = div;
+	opConvert["%"] = mod;
+	opConvert["|"] = bvor;
+	opConvert["&"] = bvand;
+	opConvert["^"] = bvxor;
+	opConvert["u-"] = neg;
+	opConvert["u!"] = notOP;
+	opConvert["u~"] = bvneg;
+	return opConvert;
 }

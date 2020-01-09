@@ -1,4 +1,5 @@
 #include "Visitor.h"
+#include "utility.h"
 
 antlrcpp::Any Visitor::visitStatement(SolidityParser::StatementContext* ctx)
 {
@@ -70,4 +71,92 @@ bool Visitor::generalizeExp(SolidityParser::ExpressionContext * ctx, string left
 		break;
 	}
 	return text == leftCode ? true : false;
+}
+
+antlrcpp::Any CalVisitor::visitExpression(SolidityParser::ExpressionContext* ctx) {
+	auto opConvert = getOpConvert();
+	if (ctx->expression().size() == 2 && ctx->children[1]->accept(this).is<string>()) { // Binary Op
+		expr left = ctx->expression()[0]->accept(this);
+		expr right = ctx->expression()[1]->accept(this);
+		string op = ctx->children[1]->getText();
+		if (right.is_bool())
+			cout << "right is bool" << endl;
+		if (left.is_const())
+			cout << "left is const" << endl;
+		return opConvert[op](left, right);
+	}
+	else if (ctx->expression().size() == 1 && ctx->children[0]->accept(this).is<string>()) { // Unary Op
+		expr subExp = ctx->expression()[0]->accept(this);
+		string op = ctx->children[0]->getText();
+		return opConvert["u" + op](subExp, c->int_val(0));
+	}
+	else if (ctx->primaryExpression())
+		return ctx->primaryExpression()->accept(this);
+	else throw "Wrong contranst";
+}
+
+antlrcpp::Any CalVisitor::visitPrimaryExpression(SolidityParser::PrimaryExpressionContext* ctx) {
+	return ctx->children[0]->accept(this);
+}
+
+antlrcpp::Any CalVisitor::visitNumberLiteral(SolidityParser::NumberLiteralContext* ctx) {
+	return ctx->children[0]->accept(this);
+}
+
+antlrcpp::Any CalVisitor::visitIdentifier(SolidityParser::IdentifierContext* ctx)
+{
+	string var_name = ctx->getText();
+	if (var_m.find(var_name) != var_m.end()) {
+		auto type = var_m[var_name].first;
+		var_name += to_string(var_m[var_name].second);
+		switch (type.type) {
+		case UINT:
+		{
+			return c->int_const(var_name.c_str());
+		}
+		case INT:
+		{
+			return c->int_const(var_name.c_str());
+		}
+		case BOOL:
+		{
+			return c->bool_const(var_name.c_str());
+		}
+		case ADDRESS:
+		{
+			return c->bv_const(var_name.c_str(), 160);
+		}
+		case BYTES:
+		{
+			return c->bv_const(var_name.c_str(), type.size);
+		}
+		default:
+		{
+			throw "Wrong Type: ";
+		}
+		}
+	}
+	else throw "ID not found";
+}
+
+antlrcpp::Any CalVisitor::visitTuppleExpression(SolidityParser::TupleExpressionContext* ctx) {
+	throw "Wrong contrainst";
+}
+antlrcpp::Any CalVisitor::visitElementaryTypeNameExpression(SolidityParser::ElementaryTypeNameContext* ctx) {
+	throw "Wrong contrainst";
+}
+
+antlrcpp::Any CalVisitor::visitTerminal(antlr4::tree::TerminalNode* ctx) {
+	string text = ctx->getText();
+	switch (ctx->getSymbol()->getType())
+	{
+	case SolidityLexer::BooleanLiteral:
+		return c->bool_val(text == "true");
+	case SolidityLexer::DecimalNumber:
+		return c->int_val(stoi(text));
+	case SolidityLexer::HexNumber:
+		return c->int_val(stoi(text, 0, 16));
+	default:
+		return text;
+	}
 }

@@ -1,16 +1,8 @@
 #include <stdio.h>
 #include <iostream>
-#include <fstream>
-#include <vector>
-#include <map>
-#include <cmath>
 #include "c++/z3++.h"
-#include "json/json.h."
 #include "utility.h"
-#include "verifier.h"
 #include "antlr4-runtime.h"
-#include "SolidityLexer.h"
-#include "SolidityParser.h"
 #include "Visitor.h"
 
 using namespace z3;
@@ -18,11 +10,11 @@ using namespace std;
 using namespace antlr4;
 
 
-void test(string trace, Verifier& ver) {
+/*void test(string trace, Verifier& ver) {
 
 	expr_vector vec = ver.readTrace(trace);
 	cout << endl;
-}
+}*/
 
 
 
@@ -49,7 +41,7 @@ int main() {
 		cout << endl;
 	}*/
 	// trace: T->a->T
-	string trace = "T->{x == 2}x=x+1{x >= 3}->T";
+	string trace = "T->{x == 2}x = x + 1;{x >= 3}->T";
 	verifier.checkTrace(trace);
 
 	/*string exp = "x <= 2";
@@ -57,6 +49,10 @@ int main() {
 	for (auto i : cont)
 		cout << i << " ";
 	cout << endl;*/
+	map<string, pair<TypeInfo, int>> var_m;
+	var_m["x"] = { {UINT, 1}, 5 };
+	var_m["y"] = { {UINT, 1}, 0 };
+	context ctx;
 
 
 

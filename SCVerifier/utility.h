@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <iostream>
+#include <fstream>
 #include <vector>
 #include <map>
 #include <stack>
@@ -17,7 +18,6 @@ using namespace z3;
 
 SolEncode convert(Json::Value ctx, Verifier& global);
 string encode(string code, Verifier& global);
-string encode(string code, map<string, string>& encodeDict, int& index);
 string getCode(Json::Value ctx, Verifier& global);
 Json::Value readJson(string filename);
 expr makeStringFunction(context* c, string s);
@@ -43,6 +43,7 @@ vector<string> infixToPostfix(string str_exp);
 expr_vector readTrace(string trace, context& ctx);
 vector<string> splitExp(string str_exp);
 
+
 template<typename TK, typename TV>
 vector<TK> extract_keys(std::map<TK, TV> const& input_map) {
 	std::vector<TK> retval;
@@ -52,5 +53,35 @@ vector<TK> extract_keys(std::map<TK, TV> const& input_map) {
 	}
 	return retval;
 }
+
+typedef expr(*pfunc) (expr, expr);
+map<string, pfunc> getOpConvert();
+
+inline expr add(expr l, expr r) { return l + r; }
+inline expr minusUti(expr l, expr r) { return l - r; }
+inline expr mul(expr l, expr r) { return l * r; }
+inline expr div(expr l, expr r) { return l / r; }
+inline expr mod(expr l, expr r) { return l % r; }
+inline expr exp(expr l, expr r) { return l ^ r.get_numeral_int(); }
+inline expr neg(expr sub, expr) { return -sub; }
+inline expr lt(expr l, expr r) { return l < r; }
+inline expr le(expr l, expr r) { return l <= r; }
+inline expr gt(expr l, expr r) { return l > r; }
+inline expr ge(expr l, expr r) { return l >= r; }
+inline expr eq(expr l, expr r) { return l == r; }
+inline expr neq(expr l, expr r) { return l != r; }
+inline expr notOP(expr sub, expr) { return !sub; }
+inline expr orOp(expr l, expr r) { return l || r; }
+inline expr andOp(expr l, expr r) { return l && r; }
+inline expr ult(expr l, expr r) { return z3::ult(l, r); }
+inline expr ule(expr l, expr r) { return z3::ule(l, r); }
+inline expr ugt(expr l, expr r) { return z3::ugt(l, r); }
+inline expr uge(expr l, expr r) { return z3::uge(l, r); }
+inline expr bvor(expr l, expr r) { return l | r; }
+inline expr bvand(expr l, expr r) { return l & r; }
+inline expr bvxor(expr l, expr r) { return l ^ r; }
+inline expr bvneg(expr sub, expr) { return ~sub; }
+
+
 
 #endif // !UTILITY_H
