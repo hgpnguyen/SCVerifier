@@ -4,7 +4,7 @@
 
 void Verifier::checkSas(string exp) {
 
-	map<string, pfunc> opConvert = getOpConvert();
+	auto opConvert = getOpConvert();
 	if (expList.find(exp) == expList.end()) {
 		cout << "Cant find expression" << endl;
 		return;
@@ -232,7 +232,7 @@ pair <expr, TypeInfo> Verifier::convertToZ3(Json::Value exp, solver& s, map<stri
 			expOP = "u" + expOP;
 		preCheck(left, right, expOP);
 		pfunc temp = opConvert[expOP];
-		expr expression = (this->*temp)(left.first, right.first);
+		expr expression = temp(left.first, right.first);
 
 		return{ expression, type };
 	}
@@ -240,7 +240,7 @@ pair <expr, TypeInfo> Verifier::convertToZ3(Json::Value exp, solver& s, map<stri
 		cout << "A" << endl;
 		string op, expOP = exp["operator"].asString();;
 		auto subExp_pair = convertToZ3(exp["subExpression"], s, opConvert, vars);
-		expr subExp = (this->*opConvert["u" + expOP])(subExp_pair.first, ctx.int_val(0));
+		expr subExp = opConvert["u" + expOP](subExp_pair.first, ctx.int_val(0));
 		return{ !subExp, subExp_pair.second };
 	}
 	else if (exp["nodeType"] == "TupleExpression")
@@ -450,35 +450,6 @@ expr_vector Verifier::readTrace(string trace, map<string, string>& encodeDict, i
 		vec.push_back(exp);
 	}
 	return vec;
-}
-
-map<string, Verifier::pfunc> Verifier::getOpConvert() {
-	map<string, pfunc> opConvert;
-	opConvert["="] = &Verifier::eq;
-	opConvert["=="] = &Verifier::eq;
-	opConvert["!="] = &Verifier::neq;
-	opConvert["||"] = &Verifier::orOp;
-	opConvert["&&"] = &Verifier::andOp;
-	opConvert["<"] = &Verifier::lt;
-	opConvert["<="] = &Verifier::le;
-	opConvert[">"] = &Verifier::gt;
-	opConvert[">="] = &Verifier::ge;
-	opConvert["u<"] = &Verifier::ult;
-	opConvert["u<="] = &Verifier::ule;
-	opConvert["u>"] = &Verifier::ugt;
-	opConvert["u>="] = &Verifier::uge;
-	opConvert["+"] = &Verifier::add;
-	opConvert["-"] = &Verifier::minus;
-	opConvert["*"] = &Verifier::mul;
-	opConvert["/"] = &Verifier::div;
-	opConvert["%"] = &Verifier::mod;
-	opConvert["|"] = &Verifier::bvor;
-	opConvert["&"] = &Verifier::bvand;
-	opConvert["^"] = &Verifier::bvxor;
-	opConvert["u-"] = &Verifier::neg;
-	opConvert["u!"] = &Verifier::notOP;
-	opConvert["u~"] = &Verifier::bvneg;
-	return opConvert;
 }
 
 bool isOperator(string str) {

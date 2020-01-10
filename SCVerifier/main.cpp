@@ -49,10 +49,6 @@ int main() {
 	for (auto i : cont)
 		cout << i << " ";
 	cout << endl;*/
-	map<string, pair<TypeInfo, int>> var_m;
-	var_m["x"] = { {UINT, 1}, 5 };
-	var_m["y"] = { {UINT, 1}, 0 };
-	context ctx;
 
 
 
