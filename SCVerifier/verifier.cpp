@@ -151,6 +151,72 @@ bool Verifier::expression(Json::Value ctx, string leftId) {
 	return getCode(ctx) == leftId ? true : false;
 }
 
+list<TreeNode>* Verifier::visit(Json::Value ctx, int depth)
+{
+	return nullptr;
+}
+
+list<TreeNode>* Verifier::block(Json::Value ctx, int depth)
+{
+	list<TreeNode> result;
+	for (auto statement : ctx["statements"]) {
+		result.splice(result.end(), *visit(statement, depth));
+	}
+	return &result;
+}
+
+list<TreeNode>* Verifier::ifStmt(Json::Value ctx, int depth)
+{
+	list<TreeNode> result;
+	list<TreeNode>* cond = visit(ctx["condition"], depth);
+	list<TreeNode>* trueCond = visit(ctx["trueBody"], depth);
+	list<TreeNode>* falseCond = ctx["falseBody"].isNull() ? visit(ctx["falseBody"], depth) : new list<TreeNode>();
+	result.emplace_back(TreeNode("assert("));
+	result.splice(result.end(), *cond);
+	result.emplace_back(TreeNode(");"));
+	result.splice(result.end(), *trueCond);
+	result.emplace_back(TreeNode("+assert(!"));
+	result.splice(result.end(), *cond);
+	result.emplace_back(TreeNode(");"));
+	result.splice(result.end(), *falseCond);
+
+	return &result;
+}
+
+list<TreeNode>* Verifier::forStmt(Json::Value ctx, int depth)
+{
+	return nullptr;
+}
+
+void Verifier::getAllFunction(Json::Value ast)
+{
+	if (ast.isObject()) {
+		if (!ast.isMember("nodeType"))
+			return;
+		else if (ast["nodeType"] == "FunctionDefinition" && !ast["body"].isNull()) {
+			string name = ast["name"].asString();
+			if (ast["kind"].asString() == "constructor")
+				name += "constructor";
+			functionsMap[name] = ast;
+			return;
+		}
+		for (auto i : ast.getMemberNames()) {
+			if (ast[i].isArray() || ast[i].isObject())
+				getAllFunction(ast[i]);
+		}
+	}
+	else if (ast.isArray()) {
+		for (auto i : ast)
+			if (i.isArray() || i.isObject())
+				getAllFunction(i);
+	}
+}
+
+TreeRoot* Verifier::convertFunction(Json::Value func, int depth)
+{
+	return nullptr;
+}
+
 bool Verifier::checkCondofTrace(string traces_str, model m, expr_vector vars, string path) {
 	auto listContraint = getConstraints(traces_str, m, vars);
 	map<string, pfunc> opConvert = getOpConvert();

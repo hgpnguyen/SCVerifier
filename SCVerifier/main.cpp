@@ -19,7 +19,7 @@ using namespace antlr4;
 
 
 int main() {
-	string smartContract = "test8", sourceCode;
+	string smartContract = "Purchase", sourceCode;
 	Json::Value root;
 	root = readJson(smartContract + ".sol_json.ast");
 	ifstream f("resources/" + smartContract + ".sol");
@@ -32,7 +32,7 @@ int main() {
 	verifier.sourceCode = rawStr;
 	verifier.index = 0;
 	verifier.ctx.set("timeout", 3000);
-	jsonScan(root, verifier);
+	/*jsonScan(root, verifier);
 	for (auto i : verifier.Lencode)
 		cout << i.encodeStr << " " << i.regEx  << endl;
 	/*for (auto j : extract_keys(verifier.expList)) {
@@ -41,8 +41,8 @@ int main() {
 		cout << endl;
 	}*/
 	// trace: T->a->T
-	string trace = "T->{x == 2}x = x + 1;{x >= 3}->T";
-	verifier.checkTrace(trace);
+	/*string trace = "T->{x == 2}x = x + 1;{x >= 3}->T";
+	verifier.checkTrace(trace);*/
 
 	/*string exp = "x <= 2";
 	auto cont = splitExp(exp);
@@ -50,6 +50,10 @@ int main() {
 		cout << i << " ";
 	cout << endl;*/
 
+	verifier.getAllFunction(root);
+	for (auto key : extract_keys(verifier.functionsMap)) {
+		cout << key << " " << verifier.functionsMap[key]["name"].asString() << endl;
+	}
 
 
 	return 0;

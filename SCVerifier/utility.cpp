@@ -383,6 +383,34 @@ vector<string> infixToPostfix(string str_exp) {
 	return result;
 }
 
+void getAllFunction(Json::Value ast, map<string, Json::Value>& functionsMap) {
+	if (ast.isObject()) {
+		if (!ast.isMember("nodeType"))
+			return;
+		else if (ast["nodeType"] == "FunctionDefinition" && !ast["body"].isNull()) {
+			string name = ast["name"].asString();
+			if (ast["kind"].asString() == "constructor")
+				name += "constructor";
+			functionsMap[name] = ast;
+			return;
+		}
+		for (auto i : ast.getMemberNames()) {
+			if (ast[i].isArray() || ast[i].isObject())
+				getAllFunction(ast[i], functionsMap);
+		}
+	}
+	else if (ast.isArray()) {
+		for (auto i : ast)
+			if (i.isArray() || i.isObject())
+				getAllFunction(i, functionsMap);
+	}
+}
+
+TreeRoot* convertFunction(Json::Value, int depth)
+{
+	return nullptr;
+}
+
 map<string, pfunc> getOpConvert()
 {
 	map<string, pfunc> opConvert;

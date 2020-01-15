@@ -14,6 +14,7 @@
 #include "SolidityLexer.h"
 #include "SolidityParser.h"
 #include "Visitor.h"
+#include "tree.h"
 
 using namespace std;
 using namespace z3;
@@ -47,6 +48,7 @@ struct Verifier {
 	map<string, Json::Value> decodeSol;
 	map<string, vector<string>> functionCodeList;
 	map<string, ExpInfo> expList;
+	map<string, Json::Value> functionsMap;
 	typedef expr(* pfunc) (expr l, expr r);
 
 
@@ -54,7 +56,8 @@ struct Verifier {
 	void checkTrace(string traces_str);
 	bool checkCondofTrace(string traces_str, model m, expr_vector vars, string path);
 	expr_vector readTrace(string trace, map<string, string>& encodeDict, int& index);
-
+	void getAllFunction(Json::Value ast);
+	TreeRoot* convertFunction(Json::Value func, int depth);
 private:
 
 	pair <expr, TypeInfo> convertToZ3(Json::Value exp, solver& s, map<string, pfunc> opConvert,
@@ -78,6 +81,12 @@ private:
 	SolEncode statementEncode(Json::Value ctx, map<string, string>& encodeDict, int& index);
 	bool assignment(Json::Value ctx);
 	bool expression(Json::Value ctx, string leftId);
+
+	list<TreeNode>* visit(Json::Value ctx, int depth);
+	
+	list<TreeNode>* block(Json::Value ctx, int depth);
+	list<TreeNode>* ifStmt(Json::Value ctx, int depth);
+	//list<TreeNode>* forStmt(Json::Value ctx, int depth);
 
 };
 
