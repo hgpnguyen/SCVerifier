@@ -151,41 +151,85 @@ bool Verifier::expression(Json::Value ctx, string leftId) {
 	return getCode(ctx) == leftId ? true : false;
 }
 
-list<TreeNode>* Verifier::visit(Json::Value ctx, int depth)
+list<TreeNode> Verifier::visit(Json::Value ctx, int depth)
 {
-	return nullptr;
+	typedef list<TreeNode> (Verifier::* pfunc)(Json::Value, int);
+	map<string, pfunc> switchCase;
+	switchCase["Block"] = &Verifier::block;
+	switchCase["IfStatement"] = &Verifier::ifStmt;
+	//switchCase["ForStatement"] = &Verifier::forStmt;
+	switchCase["ExpressionStatement"] = &Verifier::exprStmt;
+	switchCase["FunctionCall"] = &Verifier::functionCall;
+	switchCase["FunctionDefinition"] = &Verifier::functionDef;
+	string nodeType = ctx["nodeType"].asString();
+	auto func = switchCase.find(nodeType) != switchCase.end() ? switchCase[nodeType] : &Verifier::otherStmt;
+	auto result = (this->*func)(ctx, depth);
+
+	return result;
 }
 
-list<TreeNode>* Verifier::block(Json::Value ctx, int depth)
+list<TreeNode> Verifier::block(Json::Value ctx, int depth)
 {
 	list<TreeNode> result;
 	for (auto statement : ctx["statements"]) {
-		result.splice(result.end(), *visit(statement, depth));
+		auto stmt = visit(statement, depth);
+		result.splice(result.end(), stmt);
 	}
-	return &result;
+	return result;
 }
 
-list<TreeNode>* Verifier::ifStmt(Json::Value ctx, int depth)
+list<TreeNode> Verifier::ifStmt(Json::Value ctx, int depth)
 {
 	list<TreeNode> result;
-	list<TreeNode>* cond = visit(ctx["condition"], depth);
-	list<TreeNode>* trueCond = visit(ctx["trueBody"], depth);
-	list<TreeNode>* falseCond = ctx["falseBody"].isNull() ? visit(ctx["falseBody"], depth) : new list<TreeNode>();
-	result.emplace_back(TreeNode("assert("));
-	result.splice(result.end(), *cond);
-	result.emplace_back(TreeNode(");"));
-	result.splice(result.end(), *trueCond);
-	result.emplace_back(TreeNode("+assert(!"));
-	result.splice(result.end(), *cond);
-	result.emplace_back(TreeNode(");"));
-	result.splice(result.end(), *falseCond);
+	list<TreeNode> cond = visit(ctx["condition"], depth);
+	list<TreeNode> trueCond = visit(ctx["trueBody"], depth);
+	list<TreeNode> falseCond = !ctx["falseBody"].isNull() ? visit(ctx["falseBody"], depth) : list<TreeNode>();
+	result.push_back(TreeNode("assert("));
+	result.splice(result.end(), cond);
+	result.push_back(TreeNode(");"));
+	result.splice(result.end(), trueCond);
+	result.push_back(TreeNode("+assert(!"));
+	result.splice(result.end(), cond);
+	result.push_back(TreeNode(");"));
+	result.splice(result.end(), falseCond);
 
-	return &result;
+	return result;
 }
 
-list<TreeNode>* Verifier::forStmt(Json::Value ctx, int depth)
+list<TreeNode> Verifier::forStmt(Json::Value ctx, int depth)
 {
-	return nullptr;
+	return list<TreeNode>();
+}
+
+list<TreeNode> Verifier::exprStmt(Json::Value ctx, int depth)
+{
+	return visit(ctx["expression"], depth);
+}
+
+list<TreeNode> Verifier::otherStmt(Json::Value ctx, int depth)
+{
+	list<TreeNode> result;
+	cout << "NodeType: " << ctx["nodeType"] << endl;
+	string code = getCode(ctx);
+	result.push_back(TreeNode(encode(code, encodeSol, index)));
+	return result;
+}
+
+list<TreeNode> Verifier::functionCall(Json::Value ctx, int depth)
+{
+	list<TreeNode> result;
+	string name = ctx["expression"]["name"].asString();
+	map<string, Json::Value>::iterator iter;
+	if (depth == 0 || (iter = functionsMap.find(name)) == functionsMap.end()) {
+		return otherStmt(ctx, depth);
+	};
+
+	return visit(iter->second, depth - 1);
+}
+
+list<TreeNode> Verifier::functionDef(Json::Value ctx, int depth)
+{
+	return visit(ctx["body"], depth);
 }
 
 void Verifier::getAllFunction(Json::Value ast)
@@ -214,7 +258,8 @@ void Verifier::getAllFunction(Json::Value ast)
 
 TreeRoot* Verifier::convertFunction(Json::Value func, int depth)
 {
-	return nullptr;
+	auto listTree = visit(func, depth);
+	return new TreeRoot(listTree);
 }
 
 bool Verifier::checkCondofTrace(string traces_str, model m, expr_vector vars, string path) {
@@ -421,6 +466,8 @@ TypeInfo Verifier::getType(Json::Value exp) {
 string Verifier::getCode(Json::Value ctx) {
 	vector<string> location;
 	split(ctx["src"].asString(), location, ':');
+	if (location.size() == 0)
+		cout << ctx << endl;
 	return sourceCode.substr(stoi(location[0]), stoi(location[1]));
 }
 
