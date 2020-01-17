@@ -18,10 +18,19 @@ public:
 	}
 
 	string getValue() { return value; }
+	bool isLeaf() { return childrens.empty(); }
+	string DepthFS();
 };
 
 class TreeRoot {
 	list<TreeNode> childrens;
+
+public:
+	TreeRoot(list<TreeNode>& childrens) {
+		this->childrens = childrens;
+	}
+
+	string getString();
 };
 
 #endif

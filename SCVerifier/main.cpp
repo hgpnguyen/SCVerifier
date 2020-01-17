@@ -18,8 +18,9 @@ using namespace antlr4;
 
 
 
+
 int main() {
-	string smartContract = "Purchase", sourceCode;
+	string smartContract = "test8", sourceCode;
 	Json::Value root;
 	root = readJson(smartContract + ".sol_json.ast");
 	ifstream f("resources/" + smartContract + ".sol");
@@ -53,6 +54,8 @@ int main() {
 	verifier.getAllFunction(root);
 	for (auto key : extract_keys(verifier.functionsMap)) {
 		cout << key << " " << verifier.functionsMap[key]["name"].asString() << endl;
+		auto tree = verifier.convertFunction(verifier.functionsMap[key], 1);
+		cout << tree->getString() << endl;
 	}
 
 

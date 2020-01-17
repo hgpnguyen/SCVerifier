@@ -82,11 +82,16 @@ private:
 	bool assignment(Json::Value ctx);
 	bool expression(Json::Value ctx, string leftId);
 
-	list<TreeNode>* visit(Json::Value ctx, int depth);
+	list<TreeNode> visit(Json::Value ctx, int depth);
 	
-	list<TreeNode>* block(Json::Value ctx, int depth);
-	list<TreeNode>* ifStmt(Json::Value ctx, int depth);
-	//list<TreeNode>* forStmt(Json::Value ctx, int depth);
+	list<TreeNode> block(Json::Value ctx, int depth);
+	list<TreeNode> ifStmt(Json::Value ctx, int depth);
+	list<TreeNode> forStmt(Json::Value ctx, int depth);
+	list<TreeNode> exprStmt(Json::Value ctx, int depth);
+	list<TreeNode> otherStmt(Json::Value ctx, int depth);
+
+	list<TreeNode> functionCall(Json::Value ctx, int depth);
+	list<TreeNode> functionDef(Json::Value ctx, int depth);
 
 };
 
