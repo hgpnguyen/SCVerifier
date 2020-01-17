@@ -17,3 +17,11 @@ string TreeRoot::getString()
 		result += i.getValue();
 	return result;
 }
+
+string TreeRoot::getDepth()
+{
+	string result = "";
+	for (auto i : childrens)
+		result += i.DepthFS();
+	return result;
+}

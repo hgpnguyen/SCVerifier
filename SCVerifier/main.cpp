@@ -55,10 +55,11 @@ int main() {
 	for (auto key : extract_keys(verifier.functionsMap)) {
 		cout << key << " " << verifier.functionsMap[key]["name"].asString() << endl;
 		auto tree = verifier.convertFunction(verifier.functionsMap[key], 1);
-		cout << tree->getString() << endl;
+		cout << "Not Depth: " << tree->getString() << endl;
+		cout << "Depth:     " << tree->getDepth() << endl;
 	}
 
-
+	system("pause");
 	return 0;
 }
 

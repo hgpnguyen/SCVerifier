@@ -15,6 +15,7 @@ contract MyContract {
         if(true)
             x = x + 1;
         x = x + 1;
+        Test();
     }
 
     function unsat() public pure returns (uint) {
@@ -23,8 +24,10 @@ contract MyContract {
         a = a + 10 - b * 25;
         b += a - 10 / 2;
         c = 104;
+        add();
         if(c == 20)
             a = a + 5;
+        
     }
 
     function Test() public pure {
@@ -43,6 +46,9 @@ contract MyContract {
         }
         if (c > hex'10FA') {
             b = 5;
+        }
+        for(int a = 0; a < 10; ++a) {
+            b += 1;
         }
     }
 }

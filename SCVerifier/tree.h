@@ -17,6 +17,11 @@ public:
 		this->value = value;
 	}
 
+	TreeNode(string value, list<TreeNode>& childrens) {
+		this->value = value;
+		this->childrens = childrens;
+	}
+
 	string getValue() { return value; }
 	bool isLeaf() { return childrens.empty(); }
 	string DepthFS();
@@ -31,6 +36,7 @@ public:
 	}
 
 	string getString();
+	string getDepth();
 };
 
 #endif

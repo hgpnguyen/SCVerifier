@@ -157,7 +157,7 @@ list<TreeNode> Verifier::visit(Json::Value ctx, int depth)
 	map<string, pfunc> switchCase;
 	switchCase["Block"] = &Verifier::block;
 	switchCase["IfStatement"] = &Verifier::ifStmt;
-	//switchCase["ForStatement"] = &Verifier::forStmt;
+	switchCase["ForStatement"] = &Verifier::forStmt;
 	switchCase["ExpressionStatement"] = &Verifier::exprStmt;
 	switchCase["FunctionCall"] = &Verifier::functionCall;
 	switchCase["FunctionDefinition"] = &Verifier::functionDef;
@@ -182,6 +182,7 @@ list<TreeNode> Verifier::ifStmt(Json::Value ctx, int depth)
 {
 	list<TreeNode> result;
 	list<TreeNode> cond = visit(ctx["condition"], depth);
+	list<TreeNode> cond2(cond);
 	list<TreeNode> trueCond = visit(ctx["trueBody"], depth);
 	list<TreeNode> falseCond = !ctx["falseBody"].isNull() ? visit(ctx["falseBody"], depth) : list<TreeNode>();
 	result.push_back(TreeNode("assert("));
@@ -189,7 +190,7 @@ list<TreeNode> Verifier::ifStmt(Json::Value ctx, int depth)
 	result.push_back(TreeNode(");"));
 	result.splice(result.end(), trueCond);
 	result.push_back(TreeNode("+assert(!"));
-	result.splice(result.end(), cond);
+	result.splice(result.end(), cond2);
 	result.push_back(TreeNode(");"));
 	result.splice(result.end(), falseCond);
 
@@ -198,7 +199,52 @@ list<TreeNode> Verifier::ifStmt(Json::Value ctx, int depth)
 
 list<TreeNode> Verifier::forStmt(Json::Value ctx, int depth)
 {
-	return list<TreeNode>();
+	list<TreeNode> result;
+	list<TreeNode> initExpr = visit(ctx["initializationExpression"], depth);
+	list<TreeNode> cond = visit(ctx["condition"], depth);
+	list<TreeNode> cond2(cond);
+	list<TreeNode> loopExpr = visit(ctx["loopExpression"], depth);
+	list<TreeNode> body = visit(ctx["body"], depth);
+
+	result.splice(result.end(), initExpr);
+	result.push_back(TreeNode(";(assert("));
+	result.splice(result.end(), cond);
+	result.push_back(TreeNode(");"));
+	result.splice(result.end(), body);
+	result.splice(result.end(), loopExpr);
+	result.push_back(TreeNode(")*;assert(!"));
+	result.splice(result.end(), cond2);
+	result.push_back(TreeNode(")"));
+
+	return result;
+}
+
+list<TreeNode> Verifier::whileStmt(Json::Value ctx, int depth)
+{
+	list<TreeNode> result;
+	list<TreeNode> cond = visit(ctx["condition"], depth);
+	list<TreeNode> body = visit(ctx["body"], depth);
+	list<TreeNode> cond2(cond);
+	result.push_back(TreeNode(";(assert("));
+	result.splice(result.end(), cond);
+	result.push_back(TreeNode(");"));
+	result.splice(result.end(), body);
+	result.push_back(TreeNode(")*;assert(!"));
+	result.splice(result.end(), cond2);
+	result.push_back(TreeNode(")"));
+
+	return result;
+}
+
+list<TreeNode> Verifier::doWhileStmt(Json::Value ctx, int depth)
+{
+	list<TreeNode> result;
+	list<TreeNode> body = visit(ctx["body"], depth);
+	result.splice(result.end(), body);
+	list<TreeNode> while_ = whileStmt(ctx, depth);
+	result.splice(result.end(), while_);
+
+	return result;
 }
 
 list<TreeNode> Verifier::exprStmt(Json::Value ctx, int depth)
@@ -209,7 +255,6 @@ list<TreeNode> Verifier::exprStmt(Json::Value ctx, int depth)
 list<TreeNode> Verifier::otherStmt(Json::Value ctx, int depth)
 {
 	list<TreeNode> result;
-	cout << "NodeType: " << ctx["nodeType"] << endl;
 	string code = getCode(ctx);
 	result.push_back(TreeNode(encode(code, encodeSol, index)));
 	return result;
@@ -223,8 +268,9 @@ list<TreeNode> Verifier::functionCall(Json::Value ctx, int depth)
 	if (depth == 0 || (iter = functionsMap.find(name)) == functionsMap.end()) {
 		return otherStmt(ctx, depth);
 	};
-
-	return visit(iter->second, depth - 1);
+	auto temp = visit(iter->second, depth - 1);
+	result.push_back(TreeNode("#t", temp));
+	return result;
 }
 
 list<TreeNode> Verifier::functionDef(Json::Value ctx, int depth)

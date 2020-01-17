@@ -87,6 +87,8 @@ private:
 	list<TreeNode> block(Json::Value ctx, int depth);
 	list<TreeNode> ifStmt(Json::Value ctx, int depth);
 	list<TreeNode> forStmt(Json::Value ctx, int depth);
+	list<TreeNode> whileStmt(Json::Value ctx, int depth);
+	list<TreeNode> doWhileStmt(Json::Value ctx, int depth);
 	list<TreeNode> exprStmt(Json::Value ctx, int depth);
 	list<TreeNode> otherStmt(Json::Value ctx, int depth);
 
