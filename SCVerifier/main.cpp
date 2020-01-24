@@ -59,6 +59,8 @@ int main() {
 		cout << "Depth:     " << tree->getDepth() << endl;
 	}
 
+	cout << createAssert(Json::Value()) << endl;
+
 	system("pause");
 	return 0;
 }

@@ -339,6 +339,21 @@ vector<string> splitExp(string str_exp) { // split exp string into mutiple compo
 	return cont;
 }
 
+Json::Value createAssert(Json::Value param)
+{
+	Json::Value assert_, id;
+	id["nodeType"] = "Identifier";
+	id["name"] = "assert";
+
+	assert_["nodeType"] = "FunctionCall";
+	assert_["name"] = Json::arrayValue;
+	assert_["expression"] = id;
+	assert_["argumentTypes"] = Json::nullValue;
+	assert_["arguments"] = Json::arrayValue;
+	assert_["arguments"].append(param);
+	return assert_;
+}
+
 
 vector<string> infixToPostfix(string str_exp) {
 	vector<string> cont, result;
