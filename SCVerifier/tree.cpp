@@ -1,9 +1,7 @@
 #include "tree.h";
 
-string TreeNode::DepthFS()
+string VarNode::DepthFS()
 {
-	if (isLeaf())
-		return value;
 	string result = "";
 	for (auto i : childrens)
 		result += i.DepthFS();

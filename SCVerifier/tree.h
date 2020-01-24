@@ -9,22 +9,54 @@
 using namespace std;
 
 class TreeNode {
-	string value;
-	list<TreeNode> childrens;
-	
 public:
-	TreeNode(string value) {
-		this->value = value;
-	}
+	virtual string DepthFS();
+	virtual string getValue();
+};
 
-	TreeNode(string value, list<TreeNode>& childrens) {
-		this->value = value;
+class LeafNode : TreeNode {
+	string value;
+public:
+	string DepthFS() { return value; };
+	string getValue() override { return value; }
+};
+
+class SubNode : public TreeNode {
+protected:
+	list<TreeNode> childrens;
+
+public :
+	SubNode() {}
+
+	SubNode(list<TreeNode>& childrens) {
 		this->childrens = childrens;
 	}
+};
 
-	string getValue() { return value; }
-	bool isLeaf() { return childrens.empty(); }
-	string DepthFS();
+class VarNode : public SubNode {
+	string value;
+public:
+	VarNode(string value) : SubNode() {
+		this->value = value;
+	}
+
+	VarNode(string value, list<TreeNode>& childrens) : SubNode(childrens) {
+		this->value = value;
+	}
+	string DepthFS() override;
+	string getValue() override { return value; }
+};
+
+class OpNode : public SubNode {
+	string getValue() override { return DepthFS(); }
+};
+
+class OrNode : public OpNode {
+	string DepthFS() override;
+};
+
+class LoopNode : public OpNode {
+	string DepthFS() override;
 };
 
 class TreeRoot {

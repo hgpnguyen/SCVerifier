@@ -178,6 +178,8 @@ list<TreeNode> Verifier::block(Json::Value ctx, int depth)
 	return result;
 }
 
+/*if(b) {c1}; else {c2}; -> assert(b); c1 | assert(!b); c2*/
+
 list<TreeNode> Verifier::ifStmt(Json::Value ctx, int depth)
 {
 	list<TreeNode> result;
@@ -185,13 +187,18 @@ list<TreeNode> Verifier::ifStmt(Json::Value ctx, int depth)
 	list<TreeNode> cond2(cond);
 	list<TreeNode> trueCond = visit(ctx["trueBody"], depth);
 	list<TreeNode> falseCond = !ctx["falseBody"].isNull() ? visit(ctx["falseBody"], depth) : list<TreeNode>();
-	result.push_back(TreeNode("assert("));
-	result.splice(result.end(), cond);
-	result.push_back(TreeNode(");"));
+	Json::Value assert_ = createAssert(ctx["condition"]);
+	string cond_str = getCode(ctx["condition"]);
+	string code = "assert(" + cond_str + ");";
+	result.push_back(TreeNode(code));
 	result.splice(result.end(), trueCond);
-	result.push_back(TreeNode("+assert(!"));
-	result.splice(result.end(), cond2);
-	result.push_back(TreeNode(");"));
+	Json::Value unary;
+	unary["nodeType"] = "UnaryOperation";
+	unary["subExpression"] = ctx["condition"];
+	unary["typeDescriptions"] = ctx["typeDescriptions"];
+	code = "assert(!" + cond_str + ");";
+	result.push_back(TreeNode(code));
+	//result.splice(result.end(), cond2);
 	result.splice(result.end(), falseCond);
 
 	return result;
