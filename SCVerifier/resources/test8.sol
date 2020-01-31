@@ -22,7 +22,7 @@ contract MyContract {
         uint a; uint b;
         uint c;
         a = a + 10 - b * 25;
-        b += a - 10 / 2;
+        b += getInt() - 10 / 2;
         c = 104;
         add();
         if(c == 20)
@@ -41,7 +41,7 @@ contract MyContract {
         if (c >= bytes8(uint64(10))) {
             b = 8;
         }
-        if (true) {
+        if (getBool()) {
            b = 10;
         }
         if (c > hex'10FA') {
@@ -50,5 +50,14 @@ contract MyContract {
         for(int a = 0; a < 10; ++a) {
             b += 1;
         }
+    }
+
+    function getInt() public pure returns(uint) {
+        uint a;
+        a = 10 * 5;
+        return a;
+    }
+    function getBool() public pure returns(bool) {
+        return true;
     }
 }

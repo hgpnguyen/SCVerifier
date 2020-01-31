@@ -10,27 +10,32 @@ using namespace std;
 
 class TreeNode {
 public:
-	virtual string DepthFS();
-	virtual string getValue();
+	virtual string DepthFS(bool isDepth = true) = 0;
+	//virtual string getValue();
 };
 
-class LeafNode : TreeNode {
+class LeafNode : public TreeNode {
 	string value;
 public:
-	string DepthFS() { return value; };
-	string getValue() override { return value; }
+	LeafNode(string value) {
+		this->value = value;
+	}
+
+	string DepthFS(bool isDepth = true) { return value; };
+	//string getValue() override { return value; }
 };
 
 class SubNode : public TreeNode {
 protected:
-	list<TreeNode> childrens;
+	list<TreeNode*> childrens;
 
 public :
 	SubNode() {}
 
-	SubNode(list<TreeNode>& childrens) {
+	SubNode(list<TreeNode*>& childrens) {
 		this->childrens = childrens;
 	}
+	string DepthFS(bool isDepth = true);
 };
 
 class VarNode : public SubNode {
@@ -40,35 +45,47 @@ public:
 		this->value = value;
 	}
 
-	VarNode(string value, list<TreeNode>& childrens) : SubNode(childrens) {
+	VarNode(string value, list<TreeNode*>& childrens) : SubNode(childrens) {
 		this->value = value;
 	}
-	string DepthFS() override;
-	string getValue() override { return value; }
+	string DepthFS(bool isDepth = true);
+	//string getValue() override { return value; }
 };
 
 class OpNode : public SubNode {
-	string getValue() override { return DepthFS(); }
+
+public:
+	OpNode(list<TreeNode*>& childrens) : SubNode(childrens) {}
+	//string getValue() override { return DepthFS(); }
+	virtual string DepthFS(bool isDepth = true) = 0;
 };
 
 class OrNode : public OpNode {
-	string DepthFS() override;
+
+public:
+	OrNode(list<TreeNode*>& childrens) : OpNode(childrens) {
+	}
+	string DepthFS(bool isDepth = true);
 };
 
 class LoopNode : public OpNode {
-	string DepthFS() override;
+
+public:
+	LoopNode(list<TreeNode*>& childrens) : OpNode(childrens) {
+	}
+	string DepthFS(bool isDepth = true);
 };
 
 class TreeRoot {
-	list<TreeNode> childrens;
+	list<TreeNode*> childrens;
 
 public:
-	TreeRoot(list<TreeNode>& childrens) {
+	TreeRoot(list<TreeNode*>& childrens) {
 		this->childrens = childrens;
 	}
 
 	string getString();
-	string getDepth();
+	string getDepth(bool isDepth = true);
 };
 
 #endif

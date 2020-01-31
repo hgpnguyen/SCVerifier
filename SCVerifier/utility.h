@@ -44,6 +44,7 @@ vector<string> infixToPostfix(string str_exp);
 expr_vector readTrace(string trace, context& ctx);
 vector<string> splitExp(string str_exp);
 Json::Value createAssert(Json::Value param);
+Json::Value createUnary(Json::Value param);
 
 
 void getAllFunction(Json::Value ast, map<string, Json::Value>& functionsMap);

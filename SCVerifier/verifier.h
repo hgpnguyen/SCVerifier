@@ -81,19 +81,24 @@ private:
 	SolEncode statementEncode(Json::Value ctx, map<string, string>& encodeDict, int& index);
 	bool assignment(Json::Value ctx);
 	bool expression(Json::Value ctx, string leftId);
+	string encodeExt(string code, Json::Value ctx);
 
-	list<TreeNode> visit(Json::Value ctx, int depth);
+	list<TreeNode*> visit(Json::Value ctx, int depth);
 	
-	list<TreeNode> block(Json::Value ctx, int depth);
-	list<TreeNode> ifStmt(Json::Value ctx, int depth);
-	list<TreeNode> forStmt(Json::Value ctx, int depth);
-	list<TreeNode> whileStmt(Json::Value ctx, int depth);
-	list<TreeNode> doWhileStmt(Json::Value ctx, int depth);
-	list<TreeNode> exprStmt(Json::Value ctx, int depth);
-	list<TreeNode> otherStmt(Json::Value ctx, int depth);
+	list<TreeNode*> block(Json::Value ctx, int depth);
+	list<TreeNode*> ifStmt(Json::Value ctx, int depth);
+	list<TreeNode*> forStmt(Json::Value ctx, int depth);
+	list<TreeNode*> whileStmt(Json::Value ctx, int depth);
+	list<TreeNode*> doWhileStmt(Json::Value ctx, int depth);
+	list<TreeNode*> returnStmt(Json::Value ctx, int depth);
+	list<TreeNode*> exprStmt(Json::Value ctx, int depth);
+	list<TreeNode*> assignment(Json::Value ctx, int depth);
+	list<TreeNode*> binaryOp(Json::Value ctx, int depth);
+	list<TreeNode*> unaryOp(Json::Value ctx, int depth);
+	list<TreeNode*> otherStmt(Json::Value ctx, int depth); 
 
-	list<TreeNode> functionCall(Json::Value ctx, int depth);
-	list<TreeNode> functionDef(Json::Value ctx, int depth);
+	list<TreeNode*> functionCall(Json::Value ctx, int depth);
+	list<TreeNode*> functionDef(Json::Value ctx, int depth);
 
 };
 

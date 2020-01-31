@@ -151,26 +151,37 @@ bool Verifier::expression(Json::Value ctx, string leftId) {
 	return getCode(ctx) == leftId ? true : false;
 }
 
-list<TreeNode> Verifier::visit(Json::Value ctx, int depth)
+string Verifier::encodeExt(string code, Json::Value ctx)
 {
-	typedef list<TreeNode> (Verifier::* pfunc)(Json::Value, int);
+	string enStr = encode(code, encodeSol, index);
+	if (decodeSol.find(enStr) == decodeSol.end())
+		decodeSol[enStr] = ctx;
+	return enStr;
+}
+
+list<TreeNode*> Verifier::visit(Json::Value ctx, int depth)
+{
+	typedef list<TreeNode*> (Verifier::* pfunc)(Json::Value, int);
 	map<string, pfunc> switchCase;
 	switchCase["Block"] = &Verifier::block;
 	switchCase["IfStatement"] = &Verifier::ifStmt;
 	switchCase["ForStatement"] = &Verifier::forStmt;
 	switchCase["ExpressionStatement"] = &Verifier::exprStmt;
+	switchCase["Return"] = &Verifier::returnStmt;
 	switchCase["FunctionCall"] = &Verifier::functionCall;
 	switchCase["FunctionDefinition"] = &Verifier::functionDef;
+	switchCase["Assignment"] = &Verifier::assignment;
+	switchCase["BinaryOperation"] = &Verifier::binaryOp;
+	switchCase["UnaryOperation"] = &Verifier::unaryOp;
 	string nodeType = ctx["nodeType"].asString();
 	auto func = switchCase.find(nodeType) != switchCase.end() ? switchCase[nodeType] : &Verifier::otherStmt;
 	auto result = (this->*func)(ctx, depth);
-
 	return result;
 }
 
-list<TreeNode> Verifier::block(Json::Value ctx, int depth)
+list<TreeNode*> Verifier::block(Json::Value ctx, int depth)
 {
-	list<TreeNode> result;
+	list<TreeNode*> result;
 	for (auto statement : ctx["statements"]) {
 		auto stmt = visit(statement, depth);
 		result.splice(result.end(), stmt);
@@ -180,107 +191,181 @@ list<TreeNode> Verifier::block(Json::Value ctx, int depth)
 
 /*if(b) {c1}; else {c2}; -> assert(b); c1 | assert(!b); c2*/
 
-list<TreeNode> Verifier::ifStmt(Json::Value ctx, int depth)
+list<TreeNode*> Verifier::ifStmt(Json::Value ctx, int depth)
 {
-	list<TreeNode> result;
-	list<TreeNode> cond = visit(ctx["condition"], depth);
-	list<TreeNode> cond2(cond);
-	list<TreeNode> trueCond = visit(ctx["trueBody"], depth);
-	list<TreeNode> falseCond = !ctx["falseBody"].isNull() ? visit(ctx["falseBody"], depth) : list<TreeNode>();
+	list<TreeNode*> result, truebr, falsebr;
+
+	list<TreeNode*> cond = visit(ctx["condition"], depth);
+	list<TreeNode*> cond2(cond);
+	list<TreeNode*> trueCond = visit(ctx["trueBody"], depth);
+	list<TreeNode*> falseCond = !ctx["falseBody"].isNull() ? visit(ctx["falseBody"], depth) : list<TreeNode*>();
+
+	//assert(b); c1 -> t{#b}c1
 	Json::Value assert_ = createAssert(ctx["condition"]);
 	string cond_str = getCode(ctx["condition"]);
 	string code = "assert(" + cond_str + ");";
-	result.push_back(TreeNode(code));
-	result.splice(result.end(), trueCond);
-	Json::Value unary;
-	unary["nodeType"] = "UnaryOperation";
-	unary["subExpression"] = ctx["condition"];
-	unary["typeDescriptions"] = ctx["typeDescriptions"];
+	string enStr = encodeExt(code, assert_);
+	truebr.push_back(new LeafNode(enStr));
+	truebr.splice(truebr.end(), cond);
+	truebr.splice(truebr.end(), trueCond);
+	//assert(!b); c2 -> f{#b}c2
+	Json::Value unary = createUnary(ctx["condition"]);
+	assert_ = createAssert(unary);
 	code = "assert(!" + cond_str + ");";
-	result.push_back(TreeNode(code));
-	//result.splice(result.end(), cond2);
-	result.splice(result.end(), falseCond);
+	enStr = encodeExt(code, assert_);
+	falsebr.push_back(new LeafNode(enStr));
+	falsebr.splice(falsebr.end(), cond2);
+	falsebr.splice(falsebr.end(), falseCond);
+
+	list<TreeNode*> temp = { new SubNode(truebr), new SubNode(falsebr) };
+	result.push_back(new OrNode(temp));
 
 	return result;
 }
 
-list<TreeNode> Verifier::forStmt(Json::Value ctx, int depth)
+//for(ini;b1;inc) c => ini;while b1 do {c;inc}
+list<TreeNode*> Verifier::forStmt(Json::Value ctx, int depth)
 {
-	list<TreeNode> result;
-	list<TreeNode> initExpr = visit(ctx["initializationExpression"], depth);
-	list<TreeNode> cond = visit(ctx["condition"], depth);
-	list<TreeNode> cond2(cond);
-	list<TreeNode> loopExpr = visit(ctx["loopExpression"], depth);
-	list<TreeNode> body = visit(ctx["body"], depth);
+	list<TreeNode*> result, loop;
+	list<TreeNode*> initExpr = visit(ctx["initializationExpression"], depth);
+	list<TreeNode*> cond = visit(ctx["condition"], depth);
+	list<TreeNode*> cond2(cond);
+	list<TreeNode*> loopExpr = visit(ctx["loopExpression"], depth);
+	list<TreeNode*> body = visit(ctx["body"], depth);
+	string cond_str = getCode(ctx["condition"]);
 
+	//init => e
 	result.splice(result.end(), initExpr);
-	result.push_back(TreeNode(";(assert("));
-	result.splice(result.end(), cond);
-	result.push_back(TreeNode(");"));
-	result.splice(result.end(), body);
-	result.splice(result.end(), loopExpr);
-	result.push_back(TreeNode(")*;assert(!"));
+
+	//assert(b1);c;inc => t{b1}ab
+	Json::Value assert_ = createAssert(ctx["condition"]);
+	string code = "assert(" + cond_str + ");";
+	string enStr = encodeExt(code, assert_);
+	loop.push_back(new LeafNode(enStr));
+	loop.splice(loop.end(), cond);
+	loop.splice(loop.end(), body);
+	loop.splice(loop.end(), loopExpr);
+	result.push_back(new LoopNode(loop));
+
+	//assert(!b1) => f{b1}
+	Json::Value unary = createUnary(ctx["condition"]);
+	assert_ = createAssert(unary);
+	code = "assert(!" + cond_str + ");";
+	enStr = encodeExt(code, assert_);
+	result.push_back(new LeafNode(enStr));
 	result.splice(result.end(), cond2);
-	result.push_back(TreeNode(")"));
 
 	return result;
 }
 
-list<TreeNode> Verifier::whileStmt(Json::Value ctx, int depth)
+//while b do c => (assert(b);c)*;assert(!b);
+list<TreeNode*> Verifier::whileStmt(Json::Value ctx, int depth)
 {
-	list<TreeNode> result;
-	list<TreeNode> cond = visit(ctx["condition"], depth);
-	list<TreeNode> body = visit(ctx["body"], depth);
-	list<TreeNode> cond2(cond);
-	result.push_back(TreeNode(";(assert("));
-	result.splice(result.end(), cond);
-	result.push_back(TreeNode(");"));
-	result.splice(result.end(), body);
-	result.push_back(TreeNode(")*;assert(!"));
+	list<TreeNode*> result, loop;
+	list<TreeNode*> cond = visit(ctx["condition"], depth);
+	list<TreeNode*> body = visit(ctx["body"], depth);
+	list<TreeNode*> cond2(cond);
+	string cond_str = getCode(ctx["condition"]);
+
+	//(assert(b);c)* => (t{b}a)*
+	Json::Value assert_ = createAssert(ctx["condition"]);
+	string code = "assert(" + cond_str + ");";
+	string enStr = encodeExt(code, assert_);
+	loop.push_back(new LeafNode(enStr));
+	loop.splice(loop.end(), cond);
+	loop.splice(loop.end(), body);
+	result.push_back(new LoopNode(loop));
+
+	//assert(!b) => f{b}
+	Json::Value unary = createUnary(ctx["condition"]);
+	assert_ = createAssert(unary);
+	code = "assert(!" + cond_str + ");";
+	enStr = encodeExt(code, assert_);
+	result.push_back(new LeafNode(enStr));
 	result.splice(result.end(), cond2);
-	result.push_back(TreeNode(")"));
 
 	return result;
 }
 
-list<TreeNode> Verifier::doWhileStmt(Json::Value ctx, int depth)
+//do c while b => c; while b do c
+list<TreeNode*> Verifier::doWhileStmt(Json::Value ctx, int depth)
 {
-	list<TreeNode> result;
-	list<TreeNode> body = visit(ctx["body"], depth);
+	list<TreeNode*> result;
+	list<TreeNode*> body = visit(ctx["body"], depth);
 	result.splice(result.end(), body);
-	list<TreeNode> while_ = whileStmt(ctx, depth);
+	list<TreeNode*> while_ = whileStmt(ctx, depth);
 	result.splice(result.end(), while_);
 
 	return result;
 }
 
-list<TreeNode> Verifier::exprStmt(Json::Value ctx, int depth)
+list<TreeNode*> Verifier::returnStmt(Json::Value ctx, int depth)
 {
-	return visit(ctx["expression"], depth);
-}
-
-list<TreeNode> Verifier::otherStmt(Json::Value ctx, int depth)
-{
-	list<TreeNode> result;
+	list<TreeNode*> expr = visit(ctx["expression"], depth);
 	string code = getCode(ctx);
-	result.push_back(TreeNode(encode(code, encodeSol, index)));
+	string enStr = encodeExt(code, ctx);
+	list<TreeNode*> result = { new LeafNode(enStr) };
+	result.splice(result.end(), expr);
 	return result;
 }
 
-list<TreeNode> Verifier::functionCall(Json::Value ctx, int depth)
+list<TreeNode*> Verifier::exprStmt(Json::Value ctx, int depth)
 {
-	list<TreeNode> result;
+	list<TreeNode*> result = otherStmt(ctx, depth);
+	list<TreeNode*> expr = visit(ctx["expression"], depth);
+	result.splice(result.end(), expr);
+	return result;
+}
+
+list<TreeNode*> Verifier::assignment(Json::Value ctx, int depth)
+{
+	list<TreeNode*> result = visit(ctx["rightHandSide"], depth);
+	return result;
+}
+
+list<TreeNode*> Verifier::binaryOp(Json::Value ctx, int depth)
+{
+	list<TreeNode*> left = visit(ctx["leftExpression"], depth);
+	list<TreeNode*> right = visit(ctx["rightExpression"], depth);
+	left.splice(left.end(), right);
+	return left;
+}
+
+list<TreeNode*> Verifier::unaryOp(Json::Value ctx, int depth)
+{
+	return visit(ctx["subExpression"], depth);
+}
+
+list<TreeNode*> Verifier::otherStmt(Json::Value ctx, int depth)
+{
+	if (strstr(ctx["nodeType"].asCString(), "Statement") == NULL) {
+		return list<TreeNode*>();
+	}
+	list<TreeNode*> result;
+	string code = getCode(ctx);
+	string enStr = encode(code, encodeSol, index);
+	result.push_back(new LeafNode(enStr));
+	if (decodeSol.find(enStr) != decodeSol.end())
+		decodeSol[enStr] = ctx;
+	return result;
+}
+
+list<TreeNode*> Verifier::functionCall(Json::Value ctx, int depth)
+{
+	list<TreeNode*> result;
 	string name = ctx["expression"]["name"].asString();
 	map<string, Json::Value>::iterator iter;
 	if (depth == 0 || (iter = functionsMap.find(name)) == functionsMap.end()) {
-		return otherStmt(ctx, depth);
+		return list<TreeNode*>();
 	};
 	auto temp = visit(iter->second, depth - 1);
-	result.push_back(TreeNode("#t", temp));
+	string code = getCode(ctx);
+	string enStr = encodeExt(code, ctx);
+	result.push_back(new VarNode(enStr, temp));
 	return result;
 }
 
-list<TreeNode> Verifier::functionDef(Json::Value ctx, int depth)
+list<TreeNode*> Verifier::functionDef(Json::Value ctx, int depth)
 {
 	return visit(ctx["body"], depth);
 }

@@ -354,6 +354,15 @@ Json::Value createAssert(Json::Value param)
 	return assert_;
 }
 
+Json::Value createUnary(Json::Value param)
+{
+	Json::Value unary;
+	unary["nodeType"] = "UnaryOperation";
+	unary["subExpression"] = param;
+	unary["typeDescriptions"] = param["typeDescriptions"];
+	return unary;
+}
+
 
 vector<string> infixToPostfix(string str_exp) {
 	vector<string> cont, result;
