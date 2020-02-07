@@ -5,13 +5,17 @@
 #include <stdio.h>
 #include <iostream>
 #include <list>
+#include "c++/z3++.h"
+#include "json/json.h"
 
 using namespace std;
+using namespace z3;
 
 class TreeNode {
 public:
 	virtual string DepthFS(bool isDepth = true) = 0;
 	//virtual string getValue();
+
 };
 
 class LeafNode : public TreeNode {
@@ -22,7 +26,8 @@ public:
 	}
 
 	string DepthFS(bool isDepth = true) { return value; };
-	//string getValue() override { return value; }
+	string getValue() { return value; }
+	expr decodeNconvert(map<string, Json::Value> decode, context ctx);
 };
 
 class SubNode : public TreeNode {
@@ -49,7 +54,8 @@ public:
 		this->value = value;
 	}
 	string DepthFS(bool isDepth = true);
-	//string getValue() override { return value; }
+	string getValue() { return value; }
+	list<TreeNode*> getChildrent() { return childrens; }
 };
 
 class OpNode : public SubNode {

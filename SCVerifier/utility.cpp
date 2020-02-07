@@ -435,6 +435,83 @@ TreeRoot* convertFunction(Json::Value, int depth)
 	return nullptr;
 }
 
+
+expr getVar(string varname, TypeInfo type, context& ctx) {
+	string var;
+
+	switch (type.type) {
+	case UINT:
+	{
+		expr a = ctx.int_const(varname.c_str());
+		return a;
+	}
+	case INT:
+	{
+		expr a = ctx.int_const(varname.c_str());
+		return a;
+	}
+	case BOOL:
+	{
+		expr a = ctx.bool_const(varname.c_str());
+		return a;
+	}
+	case ADDRESS:
+	{
+		expr a = ctx.bv_const(varname.c_str(), 160);
+		return a;
+	}
+	case BYTES:
+	{
+		expr a = ctx.bv_const(varname.c_str(), type.size);
+		return a;
+	}
+	default:
+	{
+		cout << "Wrong Type: " << type.type << endl;
+		expr a = ctx.int_val(1);
+		return a;
+	}
+	}
+}
+
+expr getVal(string value, TypeInfo type, context& ctx) {
+	int val;
+	switch (type.type) {
+	case UINT: case INT:
+		val = value.substr(0, 2) == "0x" ? stoi(value, 0, 16) : stoi(value);
+		return ctx.int_val(val);
+	case BOOL:
+		return ctx.bool_val(value == "true");
+	case ADDRESS:
+		return ctx.bv_val(stoi(value, 0, 16), 160);
+	case BYTES:
+		return ctx.bv_val(stoi(value, 0, 16), 256);
+	default:
+		cout << "Wrong Type: " << type.type << endl;
+		return ctx.int_val(0);
+	}
+}
+
+TypeInfo getType(Json::Value exp) {
+	string type = exp["typeDescriptions"]["typeString"].asString();
+	bool isLiteral = exp["nodeType"].asString() == "Literal";
+	if (type.find("uint") != string::npos)
+		return{ UINT, isLiteral ? 256 : stoul(type.substr(4, type.length())) };
+	if (type.find("int") != string::npos)
+		return{ INT, isLiteral ? 256 : stoul(type.substr(3, type.length())) };
+	if (type.find("bool") != string::npos)
+		return{ BOOL, 1 };
+	if (type.find("address") != string::npos)
+		return{ ADDRESS, 160 };
+	if (type.find("bytes") != string::npos)
+		return{ BYTES, stoul(type.substr(5, type.length())) * 8 };
+	if (type.find("string") != string::npos)
+		return{ BYTES, 256 };
+	if (type.find("tuple()") != string::npos)
+		return{ VOID, 0 };
+	
+}
+
 map<string, pfunc> getOpConvert()
 {
 	map<string, pfunc> opConvert;

@@ -25,7 +25,6 @@ expr makeStringFunction(context* c, string s);
 void jsonScan(Json::Value root, Verifier& global);
 void split(const string& str, vector<string>& result, char delim);
 void split(const std::string& str, vector<string>& cont, string delim = " ");
-string getCode(Json::Value ctx, Verifier& global);
 void addExp(Json::Value exp, string codeExcute, bool isTrue, Verifier& global);
 SolEncode block(Json::Value ctx, Verifier& global);
 SolEncode ifStmt(Json::Value ctx, Verifier& global);
@@ -36,7 +35,6 @@ SolEncode expressionStmt(Json::Value ctx, Verifier& global);
 SolEncode otherStmt(Json::Value ctx, Verifier& global);
 bool assignment(Json::Value ctx, Verifier& global);
 bool expression(Json::Value ctx, Verifier& global, string leftId);
-SolEncode convert(Json::Value ctx, Verifier& global);
 string encode(string code, Verifier& global);
 size_t find(string str, size_t from, map<char, string> m);
 string toRawStr(std::string str);
@@ -49,6 +47,12 @@ Json::Value createUnary(Json::Value param);
 
 void getAllFunction(Json::Value ast, map<string, Json::Value>& functionsMap);
 TreeRoot* convertFunction(Json::Value, int depth);
+
+
+
+expr getVar(string varname, TypeInfo type, context& ctx);
+expr getVal(string value, TypeInfo type, context& ctx);
+TypeInfo getType(Json::Value exp);
 
 
 template<typename TK, typename TV>

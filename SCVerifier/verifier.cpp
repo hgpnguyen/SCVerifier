@@ -159,6 +159,46 @@ string Verifier::encodeExt(string code, Json::Value ctx)
 	return enStr;
 }
 
+void Verifier::solvePath(list<TreeNode*> path)
+{
+	solver s(ctx);
+	map<string, pair<TypeInfo, int>> vars;
+	EVisitor visitor(*this, vars);
+	expr_vector vector = treeNodeSolve(path, vars);
+	auto result = s.check(vector);
+}
+
+expr_vector Verifier::treeNodeSolve(list<TreeNode*> funcCodes, map<string, pair<TypeInfo, int>>& vars)
+{
+	EVisitor visitor(*this, vars);
+	expr_vector result(ctx);
+	for (auto i : funcCodes) {
+		if (dynamic_cast<LeafNode*>(i) != NULL) {
+			LeafNode* leaf = dynamic_cast<LeafNode*>(i);
+			assert(decodeSol.find(leaf->getValue()) != decodeSol.end());
+			Json::Value code = decodeSol[leaf->getValue()];
+			expr exp = visitor.visit(code);
+			result.push_back(exp);
+		}
+		else if (dynamic_cast<VarNode*>(i) != NULL) {
+			VarNode* var = dynamic_cast<VarNode*>(i);
+			assert(decodeSol.find(var->getValue()) != decodeSol.end());
+			Json::Value code = decodeSol[var->getValue()];
+			TypeInfo type = getType(code);
+			expr_vector vector = treeNodeSolve(var->getChildrent(), vars);
+			if (type.type != VOID) {
+				expr funcVar = UTILITY_H::getVar(var->getValue(), type, ctx);
+				expr return_ = funcVar == vector[vector.size() - 1];
+				vector.pop_back();
+				vector.push_back(return_);
+			}
+			for (auto j : vector)
+				result.push_back(j);
+		}
+	}
+	return result;
+}
+
 list<TreeNode*> Verifier::visit(Json::Value ctx, int depth)
 {
 	typedef list<TreeNode*> (Verifier::* pfunc)(Json::Value, int);

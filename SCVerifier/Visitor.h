@@ -14,6 +14,7 @@ using namespace std;
 using namespace z3;
 
 struct TypeInfo;
+struct Verifier;
 class Visitor : SolidityBaseVisitor {
 	antlrcpp::Any global = NULL;
 public:
@@ -44,4 +45,30 @@ public:
 	antlrcpp::Any visitTerminal(antlr4::tree::TerminalNode* ctx);
 };
 
+class EVisitor {
+	Verifier* v;
+	map<string, string> encodeSol;
+	map < string, pair<TypeInfo, int>> vars;
+	context* ctx;
+public:
+	EVisitor(Verifier& v, map < string, pair<TypeInfo, int>>& vars) {
+		this->v = &v;
+		this->vars = vars;
+	}
+
+	expr visit(Json::Value code, bool isLeft = false);
+private:
+	expr exprStmt(Json::Value, bool isLeft = false);
+	expr returnStmt(Json::Value, bool isLeft = false);
+	expr assignment(Json::Value, bool isLeft = false);
+	expr binaryOp(Json::Value, bool isLeft = false);
+	expr unaryOp(Json::Value code, bool isLeft = false);
+	expr identifier(Json::Value code, bool isLeft = false);
+	expr literal(Json::Value code, bool isLeft = false);
+	expr functionCall(Json::Value code, bool isLeft = false);
+	expr other(Json::Value code, bool isLeft = false);
+
+
+
+};
 #endif //!VISITOR_H

@@ -20,7 +20,7 @@ using namespace std;
 using namespace z3;
 using namespace antlr4;
 
-enum Type { UINT, INT, BOOL, ADDRESS, BYTES, STRING };
+enum Type { UINT, INT, BOOL, ADDRESS, BYTES, STRING, VOID };
 
 struct ExpInfo {
 	vector<string> codeActivates;
@@ -83,6 +83,9 @@ private:
 	bool expression(Json::Value ctx, string leftId);
 	string encodeExt(string code, Json::Value ctx);
 
+	void solvePath(list<TreeNode*> path);
+	expr_vector treeNodeSolve(list<TreeNode*> funcCodes, map<string, pair<TypeInfo, int>>&);
+
 	list<TreeNode*> visit(Json::Value ctx, int depth);
 	
 	list<TreeNode*> block(Json::Value ctx, int depth);
@@ -99,6 +102,7 @@ private:
 
 	list<TreeNode*> functionCall(Json::Value ctx, int depth);
 	list<TreeNode*> functionDef(Json::Value ctx, int depth);
+	
 
 };
 

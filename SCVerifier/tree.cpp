@@ -68,3 +68,10 @@ string VarNode::DepthFS(bool isDepth)
 		result += i->DepthFS(isDepth);
 	return result;
 }
+
+expr LeafNode::decodeNconvert(map<string, Json::Value> decode, context ctx)
+{
+	Json::Value code = decode[value];
+
+	return expr(ctx);
+}

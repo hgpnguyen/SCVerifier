@@ -160,3 +160,98 @@ antlrcpp::Any CalVisitor::visitTerminal(antlr4::tree::TerminalNode* ctx) {
 		return text;
 	}
 }
+
+expr EVisitor::visit(Json::Value code, bool isLeft)
+{
+	typedef expr(EVisitor::* pfunc)(Json::Value, bool);
+	map<string, pfunc> switchCase;
+	switchCase["ExpressionStatment"] = &EVisitor::exprStmt;
+	switchCase["Return"] = &EVisitor::returnStmt;
+	switchCase["Assignment"] = &EVisitor::assignment;
+	switchCase["BinaryOperation"] = &EVisitor::binaryOp;
+	switchCase["UnaryOperation"] = &EVisitor::unaryOp;
+	switchCase["FunctionCall"] = &EVisitor::functionCall;
+	switchCase["Identifier"] = &EVisitor::identifier;
+	switchCase["Literal"] = &EVisitor::literal;
+	string nodeType = code["nodeType"].asString();
+	auto func = switchCase.find(nodeType) != switchCase.end() ? switchCase[nodeType] : &EVisitor::other;
+	expr result = (this->*func)(code, isLeft);
+	return result;
+}
+
+expr EVisitor::exprStmt(Json::Value code, bool isLeft)
+{
+	return visit(code["expression"], isLeft);
+}
+
+expr EVisitor::returnStmt(Json::Value code, bool isLeft)
+{
+	return visit(code["expression"], isLeft);;
+}
+
+expr EVisitor::assignment(Json::Value code, bool isLeft)
+{
+	expr left = visit(code["leftHandSide"], true);
+	expr right = visit(code["rightHandSide"], isLeft);
+	expr result = left == right;
+	return result;
+}
+
+expr EVisitor::binaryOp(Json::Value code, bool isLeft)
+{
+	auto op = getOpConvert();
+	expr left = visit(code["leftExpression"], isLeft);
+	expr right = visit(code["rightExpression"], isLeft);
+	expr result = op[code["operator"].asString()](left, right);
+	return result;
+}
+
+expr EVisitor::unaryOp(Json::Value code, bool isLeft)
+{
+	auto op = getOpConvert();
+	expr sub = visit(code["subExpression"], isLeft);
+	expr result = op["u" + code["operator"].asString()](sub, expr(v->ctx));
+	return result;
+}
+
+expr EVisitor::identifier(Json::Value code, bool isLeft)
+{
+	string name = code["name"].asString();
+	if (vars.find(name) != vars.end()) {
+		TypeInfo type = vars[name].first;
+		int num = isLeft ? ++vars[name].second : vars[name].second;
+		name = name + to_string(num);
+		return getVar(name, type, v->ctx);
+	}
+	else {
+		TypeInfo type = getType(code);
+		vars[name] = { type, 0 };
+		return getVar(name + '0', type, v->ctx);
+	}
+}
+
+expr EVisitor::literal(Json::Value code, bool isLeft)
+{
+	TypeInfo type = getType(code);
+	string value = type.type == BYTES ? code["hexValue"].asString() : code["value"].asString();
+	expr result = getVal(value, type, v->ctx);
+	return result;
+}
+
+expr EVisitor::functionCall(Json::Value code, bool isLeft)
+{
+	string name = getCode(code, *v);
+	string varName = encode(name, *v);
+	TypeInfo type = getType(code);
+	expr result = getVar(varName, type, *ctx);
+
+	return expr(*ctx);
+}
+
+expr EVisitor::other(Json::Value code, bool isLeft)
+{
+	return expr(*ctx);
+}
+
+
+
