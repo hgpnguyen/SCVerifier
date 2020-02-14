@@ -8,6 +8,14 @@
 	return result;
 }*/
 
+expr TreeRoot::getExpr(context& c)
+{
+	expr_vector vec(c);
+	for (auto child : childrens)
+		vec.push_back(child->getExpr(c));
+	return concat(vec);
+}
+
 string TreeRoot::getDepth(bool isDepth)
 {
 	string result = "";
@@ -30,6 +38,16 @@ string OrNode::DepthFS(bool isDepth)
 	return result;
 }
 
+expr OrNode::getExpr(context& c)
+{
+	if (childrens.size() == 2)
+		return childrens.front()->getExpr(c) + childrens.back()->getExpr(c);
+	else if (childrens.size() == 1)
+		return option(childrens.front()->getExpr(c));
+	else throw "OrNode have worng number of child";
+
+}
+
 string LoopNode::DepthFS(bool isDepth)
 {
 	if (childrens.size() == 0)
@@ -41,6 +59,14 @@ string LoopNode::DepthFS(bool isDepth)
 	return result;
 }
 
+expr LoopNode::getExpr(context& c)
+{
+	expr_vector vec(c);
+	for (auto child : childrens)
+		vec.push_back(child->getExpr(c));
+	return concat(vec).loop(10);
+}
+
 string SubNode::DepthFS(bool isDepth)
 {
 	if (childrens.size() == 0)
@@ -49,6 +75,14 @@ string SubNode::DepthFS(bool isDepth)
 	for (auto i : childrens)
 		result += i->DepthFS(isDepth);
 	return result;
+}
+
+expr SubNode::getExpr(context& c)
+{
+	expr_vector vec(c);
+	for (auto child : childrens)
+		vec.push_back(child->getExpr(c));
+	return concat(vec);
 }
 
 /*string TreeNode::getValue()
@@ -69,9 +103,4 @@ string VarNode::DepthFS(bool isDepth)
 	return result;
 }
 
-expr LeafNode::decodeNconvert(map<string, Json::Value> decode, context ctx)
-{
-	Json::Value code = decode[value];
 
-	return expr(ctx);
-}

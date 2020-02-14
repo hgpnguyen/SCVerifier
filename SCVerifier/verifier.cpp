@@ -27,7 +27,7 @@ void Verifier::checkSas(string exp) {
 
 }
 
-void Verifier::checkTrace(string traces_str) {
+/*void Verifier::checkTrace(string traces_str) {
 	solver s(ctx);
 	map<string, string> encodeDict;
 	int index = 0;
@@ -49,6 +49,31 @@ void Verifier::checkTrace(string traces_str) {
 		cout << isSat << endl;
 		s.pop();
 	}
+
+}*/
+
+void Verifier::checkTrace(vector<pair<string, string>> traces, TreeRoot& functionTree) {
+	solver s(ctx);
+	expr_vector traces_expr(ctx);
+	for (auto t : traces) 
+		if (t.first[0] == 'T')
+			traces_expr.push_back(makeStringFunction(&ctx, t.first));
+		else if (t.first[0] == 'W') {
+			int num = count(t.second.begin(), t.second.end(), ';');
+			expr exp = makeStringFunction(&ctx, t.first);
+			s.add(exp.length() == num);
+			traces_expr.push_back(exp);
+		}
+
+	
+	cout << "Trace: " << traces_expr << endl;
+	expr func = functionTree.getExpr(ctx);
+	s.add(in_re(concat(traces_expr), func));
+
+	cout << s.check() << endl;
+	model m = s.get_model();
+	
+
 
 }
 
@@ -164,13 +189,14 @@ void Verifier::solvePath(list<TreeNode*> path)
 	solver s(ctx);
 	map<string, pair<TypeInfo, int>> vars;
 	EVisitor visitor(*this, vars);
-	expr_vector vector = treeNodeSolve(path, vars);
+	expr_vector vector = treeNodeSolve(path, visitor);
+	cout << vector << endl;
 	auto result = s.check(vector);
+	cout << result << endl;
 }
 
-expr_vector Verifier::treeNodeSolve(list<TreeNode*> funcCodes, map<string, pair<TypeInfo, int>>& vars)
+expr_vector Verifier::treeNodeSolve(list<TreeNode*> funcCodes, EVisitor& visitor)
 {
-	EVisitor visitor(*this, vars);
 	expr_vector result(ctx);
 	for (auto i : funcCodes) {
 		if (dynamic_cast<LeafNode*>(i) != NULL) {
@@ -178,14 +204,15 @@ expr_vector Verifier::treeNodeSolve(list<TreeNode*> funcCodes, map<string, pair<
 			assert(decodeSol.find(leaf->getValue()) != decodeSol.end());
 			Json::Value code = decodeSol[leaf->getValue()];
 			expr exp = visitor.visit(code);
-			result.push_back(exp);
+			if(exp.to_string() != "null")
+				result.push_back(exp);
 		}
 		else if (dynamic_cast<VarNode*>(i) != NULL) {
 			VarNode* var = dynamic_cast<VarNode*>(i);
 			assert(decodeSol.find(var->getValue()) != decodeSol.end());
 			Json::Value code = decodeSol[var->getValue()];
 			TypeInfo type = getType(code);
-			expr_vector vector = treeNodeSolve(var->getChildrent(), vars);
+			expr_vector vector = treeNodeSolve(var->getChildrent(), visitor);
 			if (type.type != VOID) {
 				expr funcVar = UTILITY_H::getVar(var->getValue(), type, ctx);
 				expr return_ = funcVar == vector[vector.size() - 1];
@@ -194,6 +221,47 @@ expr_vector Verifier::treeNodeSolve(list<TreeNode*> funcCodes, map<string, pair<
 			}
 			for (auto j : vector)
 				result.push_back(j);
+		}
+		else if (dynamic_cast<CondNode*>(i) != NULL) {
+			CondNode* cond = dynamic_cast<CondNode*>(i);
+			string cond_str = cond->getValue();
+			ANTLRInputStream input(cond_str);
+			SolidityLexer lexer(&input);
+			CommonTokenStream tokens(&lexer);
+			SolidityParser parser(&tokens);
+			SolidityParser::ExpressionContext* tree = parser.expression();
+			CalVisitor visitor(&ctx, visitor.getVars());
+			expr cond_expr = visitor.visitExpression(tree).as<expr>();
+			result.push_back(cond_expr);
+		}
+	}
+	return result;
+}
+
+vector<pair<string, string>> Verifier::getTraceContrainst(string traces)
+{
+	vector<pair<string, string>> result;
+	vector <string> cont;
+	expr_vector vec(ctx);
+	int index1 = 1, index2 = 1;
+	split(traces, cont, "->");
+	for (int i = 0; i < cont.size(); i++) {
+		if (cont[i] == "T") {
+			result.push_back({ "T" + to_string(index1++), "" });
+		}
+		else {
+			int start = 0;
+			for (int j = 0; j < cont[i].size(); j++)
+				if (cont[i][j] == '{' || cont[i][j] == '}') {
+					string get = cont[i].substr(start, j - start);
+					start = j + 1;
+					if (get == "")
+						continue;
+					if (cont[i][j] == '{')
+						result.push_back({ "W" + to_string(index2++), get });
+					else result.push_back({ "C", get });
+				}
+
 		}
 	}
 	return result;
@@ -385,7 +453,7 @@ list<TreeNode*> Verifier::otherStmt(Json::Value ctx, int depth)
 	string code = getCode(ctx);
 	string enStr = encode(code, encodeSol, index);
 	result.push_back(new LeafNode(enStr));
-	if (decodeSol.find(enStr) != decodeSol.end())
+	if (decodeSol.find(enStr) == decodeSol.end())
 		decodeSol[enStr] = ctx;
 	return result;
 }
@@ -438,6 +506,11 @@ TreeRoot* Verifier::convertFunction(Json::Value func, int depth)
 {
 	auto listTree = visit(func, depth);
 	return new TreeRoot(listTree);
+}
+
+void Verifier::testSolvePath(list<TreeNode*> path)
+{
+	solvePath(path);
 }
 
 bool Verifier::checkCondofTrace(string traces_str, model m, expr_vector vars, string path) {
@@ -646,7 +719,9 @@ string Verifier::getCode(Json::Value ctx) {
 	split(ctx["src"].asString(), location, ':');
 	if (location.size() == 0)
 		cout << ctx << endl;
-	return sourceCode.substr(stoi(location[0]), stoi(location[1]));
+	string result = sourceCode.substr(stoi(location[0]), stoi(location[1]));
+	result.erase(remove_if(result.begin(), result.end(), ::isspace), result.end());
+	return result;
 }
 
 string Verifier::encode(string code, map<string, string> & encodeDict, int& i) {
@@ -708,7 +783,7 @@ string Verifier::removeCond(string encodeStr) {
 	return encodeStr;
 }
 
-expr_vector Verifier::readTrace(string trace, map<string, string>& encodeDict, int& index) {
+/*expr_vector Verifier::readTrace(string trace, map<string, string>& encodeDict, int& index) {
 	vector <string> cont;
 	expr_vector vec(ctx);
 	unsigned int ind = 1;
@@ -737,6 +812,26 @@ expr_vector Verifier::readTrace(string trace, map<string, string>& encodeDict, i
 			}
 			exp = ctx.string_val(result);
 
+		}
+		vec.push_back(exp);
+	}
+	return vec;
+}*/
+
+expr_vector Verifier::readTrace(string trace, solver& s) {
+	vector <string> cont;
+	expr_vector vec(ctx);
+	unsigned int ind = 1, ind2 = 1;
+	split(trace, cont, "->");
+	for (auto i : cont) {
+		expr exp(ctx);
+		if (i == "T")
+			exp = makeStringFunction(&ctx, "T" + to_string(ind++));
+		else {
+			exp = makeStringFunction(&ctx, "W" + to_string(ind2++));
+			vector <string> cont2;
+			int size = count(i.begin(), i.end(), ';');
+			s.add(exp.length() == size);
 		}
 		vec.push_back(exp);
 	}

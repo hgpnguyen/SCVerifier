@@ -165,7 +165,7 @@ expr EVisitor::visit(Json::Value code, bool isLeft)
 {
 	typedef expr(EVisitor::* pfunc)(Json::Value, bool);
 	map<string, pfunc> switchCase;
-	switchCase["ExpressionStatment"] = &EVisitor::exprStmt;
+	switchCase["ExpressionStatement"] = &EVisitor::exprStmt;
 	switchCase["Return"] = &EVisitor::returnStmt;
 	switchCase["Assignment"] = &EVisitor::assignment;
 	switchCase["BinaryOperation"] = &EVisitor::binaryOp;
@@ -191,8 +191,8 @@ expr EVisitor::returnStmt(Json::Value code, bool isLeft)
 
 expr EVisitor::assignment(Json::Value code, bool isLeft)
 {
-	expr left = visit(code["leftHandSide"], true);
 	expr right = visit(code["rightHandSide"], isLeft);
+	expr left = visit(code["leftHandSide"], true);
 	expr result = left == right;
 	return result;
 }
@@ -243,14 +243,14 @@ expr EVisitor::functionCall(Json::Value code, bool isLeft)
 	string name = getCode(code, *v);
 	string varName = encode(name, *v);
 	TypeInfo type = getType(code);
-	expr result = getVar(varName, type, *ctx);
+	expr result = getVar(varName, type, v->ctx);
 
-	return expr(*ctx);
+	return result;
 }
 
 expr EVisitor::other(Json::Value code, bool isLeft)
 {
-	return expr(*ctx);
+	return expr(v->ctx);
 }
 
 

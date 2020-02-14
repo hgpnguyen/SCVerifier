@@ -16,12 +16,14 @@
 #include "Visitor.h"
 #include "tree.h"
 
+
 using namespace std;
 using namespace z3;
 using namespace antlr4;
 
 enum Type { UINT, INT, BOOL, ADDRESS, BYTES, STRING, VOID };
 
+class EVisitor;
 struct ExpInfo {
 	vector<string> codeActivates;
 	Json::Value exp;
@@ -53,11 +55,13 @@ struct Verifier {
 
 
 	void checkSas(string exp);
-	void checkTrace(string traces_str);
+	vector<pair<string, string>> getTraceContrainst(string traces);
+	void checkTrace(vector<pair<string, string>> traces, TreeRoot& functionTree);
 	bool checkCondofTrace(string traces_str, model m, expr_vector vars, string path);
-	expr_vector readTrace(string trace, map<string, string>& encodeDict, int& index);
+	expr_vector readTrace(string trace, solver& s);
 	void getAllFunction(Json::Value ast);
 	TreeRoot* convertFunction(Json::Value func, int depth);
+	void testSolvePath(list<TreeNode*> path);
 private:
 
 	pair <expr, TypeInfo> convertToZ3(Json::Value exp, solver& s, map<string, pfunc> opConvert,
@@ -84,7 +88,8 @@ private:
 	string encodeExt(string code, Json::Value ctx);
 
 	void solvePath(list<TreeNode*> path);
-	expr_vector treeNodeSolve(list<TreeNode*> funcCodes, map<string, pair<TypeInfo, int>>&);
+	expr_vector treeNodeSolve(list<TreeNode*> funcCodes, EVisitor& visitor);
+	
 
 	list<TreeNode*> visit(Json::Value ctx, int depth);
 	

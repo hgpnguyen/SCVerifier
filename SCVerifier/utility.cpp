@@ -66,7 +66,6 @@ string getCode(Json::Value ctx, Verifier& global) {
 	split(ctx["src"].asString(), location, ':');
 	string result = global.sourceCode.substr(stoi(location[0]), stoi(location[1]));
 	result.erase(remove_if(result.begin(), result.end(), ::isspace), result.end());
-	cout << result << endl;
 	return result;
 }
 

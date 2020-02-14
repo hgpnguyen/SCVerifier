@@ -10,11 +10,28 @@ using namespace std;
 using namespace antlr4;
 
 
-/*void test(string trace, Verifier& ver) {
+void test(string test, Verifier& ver) {
 
-	expr_vector vec = ver.readTrace(trace);
+	vector<string> cont;
+	split(test, cont, ";");
+	cont.pop_back();
+	list<TreeNode*> test_list;
+
+	for (auto i : cont) {
+		string temp = i;
+		temp.erase(remove_if(temp.begin(), temp.end(), ::isspace), temp.end());
+		string enStr = encode(temp, ver);
+		cout << temp << " " << enStr << endl;
+		test_list.push_back(new LeafNode(enStr));
+	}
+	list<TreeNode*> listTree;
+	listTree.push_back(new LeafNode("e_a"));
+	test_list.push_back(new VarNode("f_a", listTree));
+
+	test_list.push_back(new CondNode("x < 10"));
+	ver.testSolvePath(test_list);
 	cout << endl;
-}*/
+}
 
 
 
@@ -41,25 +58,30 @@ int main() {
 		verifier.checkSas(j);
 		cout << endl;
 	}*/
-	// trace: T->a->T
-	/*string trace = "T->{x == 2}x = x + 1;{x >= 3}->T";
-	verifier.checkTrace(trace);*/
 
 	/*string exp = "x <= 2";
 	auto cont = splitExp(exp);
 	for (auto i : cont)
 		cout << i << " ";
 	cout << endl;*/
-
+	string trace = "T->x = x + 1;{x >= 3}->T";
 	verifier.getAllFunction(root);
+	auto trace_ = verifier.getTraceContrainst(trace);
+	for (auto i : trace_)
+		cout << i.first << " " <<  i.second << endl;
 	for (auto key : extract_keys(verifier.functionsMap)) {
 		cout << key << " " << verifier.functionsMap[key]["name"].asString() << endl;
 		auto tree = verifier.convertFunction(verifier.functionsMap[key], 1);
 		cout << "Not Depth: " << tree->getDepth(false) << endl;
 		cout << "Depth:     " << tree->getDepth() << endl;
+		verifier.checkTrace(trace_, *tree);
 	}
 
-	cout << createAssert(Json::Value()) << endl;
+	//string test_str = "uint y; uint x; y = 0; x = y + 1; x = x + 1; x = x + 1; x = simple();";
+	//test(test_str, verifier);
+
+	// trace: T->a->T
+	
 
 	system("pause");
 	return 0;

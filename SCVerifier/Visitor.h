@@ -47,9 +47,7 @@ public:
 
 class EVisitor {
 	Verifier* v;
-	map<string, string> encodeSol;
 	map < string, pair<TypeInfo, int>> vars;
-	context* ctx;
 public:
 	EVisitor(Verifier& v, map < string, pair<TypeInfo, int>>& vars) {
 		this->v = &v;
@@ -57,6 +55,8 @@ public:
 	}
 
 	expr visit(Json::Value code, bool isLeft = false);
+	map < string, pair<TypeInfo, int>> getVars() { return vars; }
+
 private:
 	expr exprStmt(Json::Value, bool isLeft = false);
 	expr returnStmt(Json::Value, bool isLeft = false);

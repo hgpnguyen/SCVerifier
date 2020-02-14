@@ -15,7 +15,11 @@ contract MyContract {
         if(true)
             x = x + 1;
         x = x + 1;
-        Test();
+        x = simple();
+    }
+
+    function simple() public pure returns(uint) {
+        return 5;
     }
 
     function unsat() public pure returns (uint) {
