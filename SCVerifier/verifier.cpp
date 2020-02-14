@@ -72,6 +72,16 @@ void Verifier::checkTrace(vector<pair<string, string>> traces, TreeRoot& functio
 
 	cout << s.check() << endl;
 	model m = s.get_model();
+	int index = 0;
+	list<PathNode*> path;
+	for (auto i : traces) {
+		if (i.first[0] == 'T')
+			path.splice(path.end(), convertToPath(m.eval(traces_expr[index++]).to_string()));
+		else if (i.first[0] == 'W') {
+			auto temp = convertToPath(m.eval(traces_expr[index++]).to_string());
+		}
+		else path.push_back(new CondNode(i.second));
+	}
 	
 
 
@@ -237,6 +247,7 @@ expr_vector Verifier::treeNodeSolve(list<TreeNode*> funcCodes, EVisitor& visitor
 	}
 	return result;
 }
+
 
 vector<pair<string, string>> Verifier::getTraceContrainst(string traces)
 {

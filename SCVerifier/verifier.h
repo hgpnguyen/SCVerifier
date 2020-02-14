@@ -89,7 +89,7 @@ private:
 
 	void solvePath(list<TreeNode*> path);
 	expr_vector treeNodeSolve(list<TreeNode*> funcCodes, EVisitor& visitor);
-	
+	list<PathNode*> convertToPath(string path);
 
 	list<TreeNode*> visit(Json::Value ctx, int depth);
 	
