@@ -15,7 +15,7 @@ void test(string test, Verifier& ver) {
 	vector<string> cont;
 	split(test, cont, ";");
 	cont.pop_back();
-	list<TreeNode*> test_list;
+	list<PathNode*> test_list;
 
 	for (auto i : cont) {
 		string temp = i;
@@ -24,9 +24,7 @@ void test(string test, Verifier& ver) {
 		cout << temp << " " << enStr << endl;
 		test_list.push_back(new LeafNode(enStr));
 	}
-	list<TreeNode*> listTree;
-	listTree.push_back(new LeafNode("e_a"));
-	test_list.push_back(new VarNode("f_a", listTree));
+
 
 	test_list.push_back(new CondNode("x < 10"));
 	ver.testSolvePath(test_list);

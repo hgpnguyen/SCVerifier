@@ -55,22 +55,34 @@ void Verifier::checkSas(string exp) {
 void Verifier::checkTrace(vector<pair<string, string>> traces, TreeRoot& functionTree) {
 	solver s(ctx);
 	expr_vector traces_expr(ctx);
+
+	expr union_ = ctx.int_val(1);
+	for (auto key : UTILITY_H::extract_keys(decodeSol)) {
+		expr re = to_re(ctx.string_val(key));
+		if (union_.is_re())
+			union_ = union_ + re;
+		else union_ = re;
+	}
+
 	for (auto t : traces) 
 		if (t.first[0] == 'T')
 			traces_expr.push_back(makeStringFunction(&ctx, t.first));
 		else if (t.first[0] == 'W') {
 			int num = count(t.second.begin(), t.second.end(), ';');
 			expr exp = makeStringFunction(&ctx, t.first);
-			s.add(exp.length() == num);
+			s.add(in_re(exp, union_.loop(num, num)));
 			traces_expr.push_back(exp);
 		}
-
+	
 	
 	cout << "Trace: " << traces_expr << endl;
 	expr func = functionTree.getExpr(ctx);
 	s.add(in_re(concat(traces_expr), func));
-
-	cout << s.check() << endl;
+	auto result = s.check();
+	cout << result << endl;
+	cout << s << endl;
+	if (result != sat)
+		return;
 	model m = s.get_model();
 	int index = 0;
 	list<PathNode*> path;
@@ -83,7 +95,6 @@ void Verifier::checkTrace(vector<pair<string, string>> traces, TreeRoot& functio
 		else path.push_back(new CondNode(i.second));
 	}
 	
-
 
 }
 
@@ -194,7 +205,7 @@ string Verifier::encodeExt(string code, Json::Value ctx)
 	return enStr;
 }
 
-void Verifier::solvePath(list<TreeNode*> path)
+check_result Verifier::solvePath(list<PathNode*> path)
 {
 	solver s(ctx);
 	map<string, pair<TypeInfo, int>> vars;
@@ -203,9 +214,10 @@ void Verifier::solvePath(list<TreeNode*> path)
 	cout << vector << endl;
 	auto result = s.check(vector);
 	cout << result << endl;
+	return result;
 }
 
-expr_vector Verifier::treeNodeSolve(list<TreeNode*> funcCodes, EVisitor& visitor)
+expr_vector Verifier::treeNodeSolve(list<PathNode*> funcCodes, EVisitor& visitor)
 {
 	expr_vector result(ctx);
 	for (auto i : funcCodes) {
@@ -217,7 +229,7 @@ expr_vector Verifier::treeNodeSolve(list<TreeNode*> funcCodes, EVisitor& visitor
 			if(exp.to_string() != "null")
 				result.push_back(exp);
 		}
-		else if (dynamic_cast<VarNode*>(i) != NULL) {
+		/*else if (dynamic_cast<VarNode*>(i) != NULL) {
 			VarNode* var = dynamic_cast<VarNode*>(i);
 			assert(decodeSol.find(var->getValue()) != decodeSol.end());
 			Json::Value code = decodeSol[var->getValue()];
@@ -231,7 +243,7 @@ expr_vector Verifier::treeNodeSolve(list<TreeNode*> funcCodes, EVisitor& visitor
 			}
 			for (auto j : vector)
 				result.push_back(j);
-		}
+		}*/
 		else if (dynamic_cast<CondNode*>(i) != NULL) {
 			CondNode* cond = dynamic_cast<CondNode*>(i);
 			string cond_str = cond->getValue();
@@ -246,6 +258,11 @@ expr_vector Verifier::treeNodeSolve(list<TreeNode*> funcCodes, EVisitor& visitor
 		}
 	}
 	return result;
+}
+
+list<PathNode*> Verifier::convertToPath(string path)
+{
+	return list<PathNode*>();
 }
 
 
@@ -519,7 +536,7 @@ TreeRoot* Verifier::convertFunction(Json::Value func, int depth)
 	return new TreeRoot(listTree);
 }
 
-void Verifier::testSolvePath(list<TreeNode*> path)
+void Verifier::testSolvePath(list<PathNode*> path)
 {
 	solvePath(path);
 }

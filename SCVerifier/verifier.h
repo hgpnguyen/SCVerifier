@@ -61,7 +61,7 @@ struct Verifier {
 	expr_vector readTrace(string trace, solver& s);
 	void getAllFunction(Json::Value ast);
 	TreeRoot* convertFunction(Json::Value func, int depth);
-	void testSolvePath(list<TreeNode*> path);
+	void testSolvePath(list<PathNode*> path);
 private:
 
 	pair <expr, TypeInfo> convertToZ3(Json::Value exp, solver& s, map<string, pfunc> opConvert,
@@ -87,8 +87,8 @@ private:
 	bool expression(Json::Value ctx, string leftId);
 	string encodeExt(string code, Json::Value ctx);
 
-	void solvePath(list<TreeNode*> path);
-	expr_vector treeNodeSolve(list<TreeNode*> funcCodes, EVisitor& visitor);
+	check_result solvePath(list<PathNode*> path);
+	expr_vector treeNodeSolve(list<PathNode*> funcCodes, EVisitor& visitor);
 	list<PathNode*> convertToPath(string path);
 
 	list<TreeNode*> visit(Json::Value ctx, int depth);
