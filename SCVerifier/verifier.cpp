@@ -65,8 +65,11 @@ void Verifier::checkTrace(vector<pair<string, string>> traces, TreeRoot& functio
 	}
 
 	for (auto t : traces) 
-		if (t.first[0] == 'T')
-			traces_expr.push_back(makeStringFunction(&ctx, t.first));
+		if (t.first[0] == 'T') {
+			expr exp = makeStringFunction(&ctx, t.first);
+			traces_expr.push_back(exp);
+			s.add(!prefixof(ctx.string_val("_"), exp)); // remove situation W1 = "e" and T1 = "_a"
+		}
 		else if (t.first[0] == 'W') {
 			int num = count(t.second.begin(), t.second.end(), ';');
 			expr exp = makeStringFunction(&ctx, t.first);
@@ -76,26 +79,43 @@ void Verifier::checkTrace(vector<pair<string, string>> traces, TreeRoot& functio
 	
 	
 	cout << "Trace: " << traces_expr << endl;
-	expr func = functionTree.getExpr(ctx);
+	expr func = functionTree.getExpr(ctx, s);
 	s.add(in_re(concat(traces_expr), func));
 	auto result = s.check();
 	cout << result << endl;
-	cout << s << endl;
-	if (result != sat)
-		return;
-	model m = s.get_model();
-	int index = 0;
-	list<PathNode*> path;
-	for (auto i : traces) {
-		if (i.first[0] == 'T')
-			path.splice(path.end(), convertToPath(m.eval(traces_expr[index++]).to_string()));
-		else if (i.first[0] == 'W') {
-			auto temp = convertToPath(m.eval(traces_expr[index++]).to_string());
+	while (s.check() == sat) {
+		model m = s.get_model();
+		int index = 0;
+		list<PathNode*> path;
+		bool checkTrToCode = false;
+		for (auto i : traces) {
+			if (i.first[0] == 'T')
+				path.splice(path.end(), convertToPath(m.eval(traces_expr[index++]).get_string(), m));
+			else if (i.first[0] == 'W') {
+				auto temp = convertToPath(m.eval(traces_expr[index++]).get_string(), m);
+				checkTrToCode = mapTraceToCode(temp, i.second, CondNode::m);
+				path.splice(path.end(), temp);
+			}
+			else path.push_back(new CondNode(i.second));
 		}
-		else path.push_back(new CondNode(i.second));
-	}
-	
+		//PathNode::ctx = &ctx;
 
+		cout << "Model: " << m << endl;
+		cout << "Path: ";
+		for (auto i : path)
+			cout << i->DepthFS() << " ";
+		cout << endl;
+
+		if (!checkTrToCode || !solvePath(path)) {
+			s.add(removeOldSol(m, traces_expr));
+
+		}
+		else {
+			cout << "Find Solution" << endl;
+			return;
+		}
+	
+	}
 }
 
 expr_vector Verifier::getAllPath(expr exp) {
@@ -221,48 +241,82 @@ expr_vector Verifier::treeNodeSolve(list<PathNode*> funcCodes, EVisitor& visitor
 {
 	expr_vector result(ctx);
 	for (auto i : funcCodes) {
-		if (dynamic_cast<LeafNode*>(i) != NULL) {
-			LeafNode* leaf = dynamic_cast<LeafNode*>(i);
-			assert(decodeSol.find(leaf->getValue()) != decodeSol.end());
-			Json::Value code = decodeSol[leaf->getValue()];
-			expr exp = visitor.visit(code);
-			if(exp.to_string() != "null")
-				result.push_back(exp);
-		}
-		/*else if (dynamic_cast<VarNode*>(i) != NULL) {
-			VarNode* var = dynamic_cast<VarNode*>(i);
-			assert(decodeSol.find(var->getValue()) != decodeSol.end());
-			Json::Value code = decodeSol[var->getValue()];
-			TypeInfo type = getType(code);
-			expr_vector vector = treeNodeSolve(var->getChildrent(), visitor);
-			if (type.type != VOID) {
-				expr funcVar = UTILITY_H::getVar(var->getValue(), type, ctx);
-				expr return_ = funcVar == vector[vector.size() - 1];
-				vector.pop_back();
-				vector.push_back(return_);
-			}
-			for (auto j : vector)
-				result.push_back(j);
-		}*/
-		else if (dynamic_cast<CondNode*>(i) != NULL) {
-			CondNode* cond = dynamic_cast<CondNode*>(i);
-			string cond_str = cond->getValue();
-			ANTLRInputStream input(cond_str);
-			SolidityLexer lexer(&input);
-			CommonTokenStream tokens(&lexer);
-			SolidityParser parser(&tokens);
-			SolidityParser::ExpressionContext* tree = parser.expression();
-			CalVisitor visitor(&ctx, visitor.getVars());
-			expr cond_expr = visitor.visitExpression(tree).as<expr>();
-			result.push_back(cond_expr);
-		}
+		cout << i->getValue() << " ";
+		expr_vector temp = i->toZ3(visitor);
+		for (auto j : temp)
+			result.push_back(j);
 	}
 	return result;
 }
 
-list<PathNode*> Verifier::convertToPath(string path)
+list<PathNode*> Verifier::convertToPath(string path, model m)
 {
-	return list<PathNode*>();
+	if(path == "")
+		return list<PathNode*>();
+	list<PathNode*> result;
+	string statement = string(1, path[0]);
+	for (int i = 1; i < path.size(); ++i) {
+		if (path[i] == '_') {
+			statement += path.substr(i++, 2);
+		}
+		else {
+			if (decodeSol[statement]["nodeType"] == "FunctionCall") {
+				expr funcVar = m.eval(makeStringFunction(&ctx, statement));
+				auto l = convertToPath(funcVar.get_string(), m);
+				result.push_back(new FuncNode(statement, l));
+			}
+			else result.push_back(new StmtNode(statement));
+			statement = string(1, path[i]);
+		}
+	}
+	if (decodeSol[statement]["nodeType"] == "FunctionCall") {
+		auto l = convertToPath(m.eval(makeStringFunction(&ctx, statement)).get_string(), m);
+		result.push_back(new FuncNode(statement, l));
+	}
+	else result.push_back(new StmtNode(statement));
+	return result;
+}
+
+expr_vector Verifier::convertFuncCall(string var)
+{
+	return expr_vector(ctx);
+}
+
+bool Verifier::mapTraceToCode(list<PathNode*> path, string traces, map<string, string>& m)
+{
+	vector<string> cont;
+	split(traces, cont, ';');
+	for (auto i : cont)
+		cout << i << " ";
+	cout << endl;
+	for (auto i : path)
+		cout << i->getValue() << " ";
+	cout << endl;
+	assert(path.size() == cont.size());
+	int index = 0;
+	for (auto p : path) {
+		ANTLRInputStream input(cont[index++] + ';');
+		SolidityLexer lexer(&input);
+		CommonTokenStream tokens(&lexer);
+		SolidityParser parser(&tokens);
+		SolidityParser::StatementContext* tree = parser.statement();
+		Json::Value code = decodeSol[p->getValue()];
+		MapVisitor visitor(code, m, sourceCode);
+		bool result = visitor.visitStatement(tree).as<bool>();
+		if (!result)
+			return false;
+	}
+	return true;
+}
+
+expr Verifier::removeOldSol(model& m, expr_vector vars)
+{
+	expr_vector orExp(ctx);
+	for (auto j : vars) {
+		if (j.is_const())
+			orExp.push_back(j != m.eval(j));
+	}
+	return mk_or(orExp);
 }
 
 
@@ -337,17 +391,17 @@ list<TreeNode*> Verifier::ifStmt(Json::Value ctx, int depth)
 	list<TreeNode*> falseCond = !ctx["falseBody"].isNull() ? visit(ctx["falseBody"], depth) : list<TreeNode*>();
 
 	//assert(b); c1 -> t{#b}c1
-	Json::Value assert_ = createAssert(ctx["condition"]);
+	Json::Value assert_ = createExprStmt(createAssert(ctx["condition"]));
 	string cond_str = getCode(ctx["condition"]);
-	string code = "assert(" + cond_str + ");";
+	string code = "assert(" + cond_str + ");stmt";
 	string enStr = encodeExt(code, assert_);
 	truebr.push_back(new LeafNode(enStr));
 	truebr.splice(truebr.end(), cond);
 	truebr.splice(truebr.end(), trueCond);
 	//assert(!b); c2 -> f{#b}c2
-	Json::Value unary = createUnary(ctx["condition"]);
-	assert_ = createAssert(unary);
-	code = "assert(!" + cond_str + ");";
+	Json::Value unary = createUnary(ctx["condition"], "!");
+	assert_ = createExprStmt(createAssert(unary));
+	code = "assert(!" + cond_str + ");stmt";
 	enStr = encodeExt(code, assert_);
 	falsebr.push_back(new LeafNode(enStr));
 	falsebr.splice(falsebr.end(), cond2);
@@ -374,8 +428,8 @@ list<TreeNode*> Verifier::forStmt(Json::Value ctx, int depth)
 	result.splice(result.end(), initExpr);
 
 	//assert(b1);c;inc => t{b1}ab
-	Json::Value assert_ = createAssert(ctx["condition"]);
-	string code = "assert(" + cond_str + ");";
+	Json::Value assert_ = createExprStmt(createAssert(ctx["condition"]));
+	string code = "assert(" + cond_str + ");stmt";
 	string enStr = encodeExt(code, assert_);
 	loop.push_back(new LeafNode(enStr));
 	loop.splice(loop.end(), cond);
@@ -384,9 +438,9 @@ list<TreeNode*> Verifier::forStmt(Json::Value ctx, int depth)
 	result.push_back(new LoopNode(loop));
 
 	//assert(!b1) => f{b1}
-	Json::Value unary = createUnary(ctx["condition"]);
-	assert_ = createAssert(unary);
-	code = "assert(!" + cond_str + ");";
+	Json::Value unary = createUnary(ctx["condition"], "!");
+	assert_ = createExprStmt(createAssert(unary));
+	code = "assert(!" + cond_str + ");stmt";
 	enStr = encodeExt(code, assert_);
 	result.push_back(new LeafNode(enStr));
 	result.splice(result.end(), cond2);
@@ -404,8 +458,8 @@ list<TreeNode*> Verifier::whileStmt(Json::Value ctx, int depth)
 	string cond_str = getCode(ctx["condition"]);
 
 	//(assert(b);c)* => (t{b}a)*
-	Json::Value assert_ = createAssert(ctx["condition"]);
-	string code = "assert(" + cond_str + ");";
+	Json::Value assert_ = createExprStmt(createAssert(ctx["condition"]));
+	string code = "assert(" + cond_str + ");stmt";
 	string enStr = encodeExt(code, assert_);
 	loop.push_back(new LeafNode(enStr));
 	loop.splice(loop.end(), cond);
@@ -413,9 +467,9 @@ list<TreeNode*> Verifier::whileStmt(Json::Value ctx, int depth)
 	result.push_back(new LoopNode(loop));
 
 	//assert(!b) => f{b}
-	Json::Value unary = createUnary(ctx["condition"]);
-	assert_ = createAssert(unary);
-	code = "assert(!" + cond_str + ");";
+	Json::Value unary = createUnary(ctx["condition"], "!");
+	assert_ = createExprStmt(createAssert(unary));
+	code = "assert(!" + cond_str + ");stmt";
 	enStr = encodeExt(code, assert_);
 	result.push_back(new LeafNode(enStr));
 	result.splice(result.end(), cond2);
@@ -479,6 +533,7 @@ list<TreeNode*> Verifier::otherStmt(Json::Value ctx, int depth)
 	}
 	list<TreeNode*> result;
 	string code = getCode(ctx);
+	code = code + "stmt";
 	string enStr = encode(code, encodeSol, index);
 	result.push_back(new LeafNode(enStr));
 	if (decodeSol.find(enStr) == decodeSol.end())
@@ -488,6 +543,8 @@ list<TreeNode*> Verifier::otherStmt(Json::Value ctx, int depth)
 
 list<TreeNode*> Verifier::functionCall(Json::Value ctx, int depth)
 {
+	if (ctx["expression"]["nodeType"] == "Identifier" && ctx["expression"]["name"] == "assert")
+		return visit(ctx["arguments"][0], depth);
 	list<TreeNode*> result;
 	string name = ctx["expression"]["name"].asString();
 	map<string, Json::Value>::iterator iter;
@@ -538,7 +595,7 @@ TreeRoot* Verifier::convertFunction(Json::Value func, int depth)
 
 void Verifier::testSolvePath(list<PathNode*> path)
 {
-	solvePath(path);
+	//solvePath(path, NULL);
 }
 
 bool Verifier::checkCondofTrace(string traces_str, model m, expr_vector vars, string path) {
@@ -551,18 +608,15 @@ bool Verifier::checkCondofTrace(string traces_str, model m, expr_vector vars, st
 		for (;j < i.second; ++j)
 			if (decodeSol[string(1, path[j])]["nodeType"] == "ExpressionStatement") {
 				auto expr = convertToZ3(decodeSol[string(1, path[j])]["expression"], s, opConvert, vars_m);
-				cout << expr.first << endl;
 				s.add(expr.first);
 				
 			}
 		try {
 			increaseVar(s, vars_m);
 			expr exp = calculate(i.first, vars_m);
-			cout << exp << endl;
 			s.add(exp);
 		}
 		catch (const char* msg) {
-			cout << msg << endl;
 			return false;
 		}
 
@@ -627,7 +681,6 @@ pair <expr, TypeInfo> Verifier::convertToZ3(Json::Value exp, solver& s, map<stri
 		return{ expression, type };
 	}
 	else  if (exp["nodeType"] == "UnaryOperation") {
-		cout << "A" << endl;
 		string op, expOP = exp["operator"].asString();;
 		auto subExp_pair = convertToZ3(exp["subExpression"], s, opConvert, vars);
 		expr subExp = opConvert["u" + expOP](subExp_pair.first, ctx.int_val(0));
@@ -745,8 +798,6 @@ TypeInfo Verifier::getType(Json::Value exp) {
 string Verifier::getCode(Json::Value ctx) {
 	vector<string> location;
 	split(ctx["src"].asString(), location, ':');
-	if (location.size() == 0)
-		cout << ctx << endl;
 	string result = sourceCode.substr(stoi(location[0]), stoi(location[1]));
 	result.erase(remove_if(result.begin(), result.end(), ::isspace), result.end());
 	return result;
@@ -932,7 +983,8 @@ expr Verifier::calculate(string exp, map < string, pair<TypeInfo, int>> vars) {
 	CommonTokenStream tokens(&lexer);
 	SolidityParser parser(&tokens);
 	SolidityParser::ExpressionContext* tree = parser.expression();
-	CalVisitor visitor(&ctx, vars);
+	map<string, string> m;
+	CalVisitor visitor(&ctx, vars, m);
 	expr result = visitor.visitExpression(tree).as<expr>();
 
 	return result;

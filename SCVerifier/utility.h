@@ -13,6 +13,7 @@
 #include "json/json.h"
 #include "verifier.h"
 #include "tree.h"
+#include "Visitor.h"
 
 using namespace std;
 using namespace z3;
@@ -20,6 +21,7 @@ using namespace z3;
 SolEncode convert(Json::Value ctx, Verifier& global);
 string encode(string code, Verifier& global);
 string getCode(Json::Value ctx, Verifier& global);
+string getCode(Json::Value ctx, string sourceCode);
 Json::Value readJson(string filename);
 expr makeStringFunction(context* c, string s);
 void jsonScan(Json::Value root, Verifier& global);
@@ -41,9 +43,10 @@ string toRawStr(std::string str);
 vector<string> infixToPostfix(string str_exp);
 expr_vector readTrace(string trace, context& ctx);
 vector<string> splitExp(string str_exp);
-Json::Value createAssert(Json::Value param);
-Json::Value createUnary(Json::Value param);
 
+Json::Value createAssert(Json::Value param);
+Json::Value createUnary(Json::Value param, string op);
+Json::Value createExprStmt(Json::Value param);
 
 void getAllFunction(Json::Value ast, map<string, Json::Value>& functionsMap);
 TreeRoot* convertFunction(Json::Value, int depth);

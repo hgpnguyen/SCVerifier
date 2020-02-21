@@ -105,7 +105,8 @@ antlrcpp::Any CalVisitor::visitNumberLiteral(SolidityParser::NumberLiteralContex
 
 antlrcpp::Any CalVisitor::visitIdentifier(SolidityParser::IdentifierContext* ctx)
 {
-	string var_name = ctx->getText();
+	assert(traceToCode.find(ctx->getText()) != traceToCode.end());
+	string var_name = traceToCode[ctx->getText()];
 	if (var_m.find(var_name) != var_m.end()) {
 		auto type = var_m[var_name].first;
 		var_name += to_string(var_m[var_name].second);
@@ -179,6 +180,16 @@ expr EVisitor::visit(Json::Value code, bool isLeft)
 	return result;
 }
 
+Json::Value EVisitor::toJson(string str)
+{
+	return v->decodeSol[str]; 
+}
+
+context* EVisitor::getContext()
+{
+	return &v->ctx;
+}
+
 expr EVisitor::exprStmt(Json::Value code, bool isLeft)
 {
 	return visit(code["expression"], isLeft);
@@ -240,6 +251,8 @@ expr EVisitor::literal(Json::Value code, bool isLeft)
 
 expr EVisitor::functionCall(Json::Value code, bool isLeft)
 {
+	if (code["expression"]["nodeType"] == "Identifier" && code["expression"]["name"] == "assert")
+		return visit(code["arguments"][0]);
 	string name = getCode(code, *v);
 	string varName = encode(name, *v);
 	TypeInfo type = getType(code);
@@ -253,5 +266,42 @@ expr EVisitor::other(Json::Value code, bool isLeft)
 	return expr(v->ctx);
 }
 
+antlrcpp::Any MapVisitor::visitStatement(SolidityParser::StatementContext* ctx)
+{
 
+	if (ctx->simpleStatement()) {
+		return visitSimpleStatement(ctx->simpleStatement()).as<bool>();
+	}
+	return false;
 
+}
+
+antlrcpp::Any MapVisitor::visitSimpleStatement(SolidityParser::SimpleStatementContext* ctx)
+{
+	return ctx->children[0]->accept(this).as<bool>();
+}
+
+antlrcpp::Any MapVisitor::visitVariableDeclarationStatement(SolidityParser::VariableDeclarationStatementContext* ctx)
+{
+	return false;
+}
+
+antlrcpp::Any MapVisitor::visitExpressionStatement(SolidityParser::ExpressionStatementContext* ctx)
+{
+	if (json["nodeType"] != "ExpressionStatement")
+		return false;
+	json = json["expression"];
+	return ctx->expression()->accept(this);
+}
+
+antlrcpp::Any MapVisitor::visitExpression(SolidityParser::ExpressionContext* ctx)
+{
+	string op;
+	if (ctx->expression().size() == 2 && ((op = ctx->children[1]->getText()) == "=" || op == "+=" || op == "-=")) {
+		if (json["nodeType"] != "Assignment")
+			return false;
+		(*m)[ctx->expression(0)->getText()] = getCode(json["leftHandSide"], sourceCode);
+		return true;
+	}
+	return false;
+}

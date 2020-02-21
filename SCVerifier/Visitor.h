@@ -7,13 +7,20 @@
 #include "antlr4-runtime.h"
 #include "SolidityBaseVisitor.h"
 #include "c++/z3++.h"
-#include "verifier.h"
+#include "json/json.h"
+
 
 
 using namespace std;
 using namespace z3;
 
-struct TypeInfo;
+enum Type { UINT, INT, BOOL, ADDRESS, BYTES, STRING, VOID };
+
+struct TypeInfo {
+	Type type;
+	unsigned int size;
+};
+
 struct Verifier;
 class Visitor : SolidityBaseVisitor {
 	antlrcpp::Any global = NULL;
@@ -28,11 +35,13 @@ public:
 class CalVisitor : SolidityBaseVisitor {
 	context* c;
 	map < string, pair<TypeInfo, int>> var_m;
+	map<string, string> traceToCode;
 	
 public:
-	CalVisitor(context* ctx, map < string, pair<TypeInfo, int>> var_m) {
+	CalVisitor(context* ctx, map < string, pair<TypeInfo, int>> var_m, map<string, string> traceToCode) {
 		c = ctx;
 		this->var_m = var_m;
+		this->traceToCode = traceToCode;
 	}
 
 	antlrcpp::Any visitExpression(SolidityParser::ExpressionContext* ctx);
@@ -56,6 +65,8 @@ public:
 
 	expr visit(Json::Value code, bool isLeft = false);
 	map < string, pair<TypeInfo, int>> getVars() { return vars; }
+	Json::Value toJson(string str);
+	context* getContext();
 
 private:
 	expr exprStmt(Json::Value, bool isLeft = false);
@@ -69,6 +80,25 @@ private:
 	expr other(Json::Value code, bool isLeft = false);
 
 
+
+};
+
+class MapVisitor : SolidityBaseVisitor {
+	Json::Value json;
+	map<string, string>* m;
+	string sourceCode;
+public:
+	MapVisitor(Json::Value json, map<string, string>& m, string sourceCode) {
+		this->json = json;
+		this->m = &m;
+		this->sourceCode = sourceCode;
+	}
+
+	antlrcpp::Any visitStatement(SolidityParser::StatementContext* ctx);
+	antlrcpp::Any visitSimpleStatement(SolidityParser::SimpleStatementContext* ctx);
+	antlrcpp::Any visitVariableDeclarationStatement(SolidityParser::VariableDeclarationStatementContext* ctx);
+	antlrcpp::Any visitExpressionStatement(SolidityParser::ExpressionStatementContext* ctx);
+	antlrcpp::Any visitExpression(SolidityParser::ExpressionContext* ctx);
 
 };
 #endif //!VISITOR_H

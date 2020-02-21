@@ -7,25 +7,26 @@
 #include <list>
 #include "c++/z3++.h"
 #include "json/json.h"
+#include "Visitor.h"
+#include "antlr4-runtime.h"
+#include "SolidityLexer.h"
+#include "SolidityParser.h"
+
 
 using namespace std;
 using namespace z3;
+using namespace antlr4;
 
 class TreeNode {
 public:
 	virtual string DepthFS(bool isDepth = true) = 0;
-	virtual expr getExpr(context& c) = 0;
+	virtual expr getExpr(context& c, solver& s) = 0;
 	//virtual string getValue();
 
 };
 
-class PathNode : public TreeNode {
-public:
-	virtual string DepthFS(bool isDepth = true) = 0;
-	virtual expr getExpr(context& c) = 0;
-};
 
-class LeafNode : public PathNode {
+class LeafNode : public TreeNode {
 	string value;
 public:
 	LeafNode(string value) {
@@ -33,22 +34,10 @@ public:
 	}
 
 	string DepthFS(bool isDepth = true) { return value; };
-	expr getExpr(context& c) { return to_re(c.string_val(value)); }
+	expr getExpr(context& c, solver& s) { return to_re(c.string_val(value)); }
 	string getValue() { return value; }
 };
 
-class CondNode : public PathNode {
-	string cond;
-
-public:
-	CondNode(string cond) {
-		this->cond = cond;
-	}
-	string DepthFS(bool isDepth = true) { return "{" + cond + "}"; };
-	expr getExpr(context& c) { throw "CondNode in tree"; }
-	string getValue() { return cond; }
-
-};
 
 class SubNode : public TreeNode {
 protected:
@@ -61,7 +50,7 @@ public :
 		this->childrens = childrens;
 	}
 	string DepthFS(bool isDepth = true);
-	expr getExpr(context& c);
+	expr getExpr(context& c, solver& s);
 };
 
 class VarNode : public SubNode {
@@ -76,6 +65,7 @@ public:
 	}
 	string DepthFS(bool isDepth = true);
 	string getValue() { return value; }
+	expr getExpr(context& c, solver& s);
 	list<TreeNode*> getChildrent() { return childrens; }
 };
 
@@ -85,7 +75,7 @@ public:
 	OpNode(list<TreeNode*>& childrens) : SubNode(childrens) {}
 	//string getValue() override { return DepthFS(); }
 	virtual string DepthFS(bool isDepth = true) = 0;
-	virtual expr getExpr(context& c) = 0;
+	virtual expr getExpr(context& c, solver& s) = 0;
 };
 
 class OrNode : public OpNode {
@@ -94,7 +84,7 @@ public:
 	OrNode(list<TreeNode*>& childrens) : OpNode(childrens) {
 	}
 	string DepthFS(bool isDepth = true);
-	expr getExpr(context& c);
+	expr getExpr(context& c, solver& s);
 };
 
 class LoopNode : public OpNode {
@@ -103,7 +93,7 @@ public:
 	LoopNode(list<TreeNode*>& childrens) : OpNode(childrens) {
 	}
 	string DepthFS(bool isDepth = true);
-	expr getExpr(context& c);
+	expr getExpr(context& c, solver& s);
 };
 
 class TreeRoot {
@@ -114,8 +104,54 @@ public:
 		this->childrens = childrens;
 	}
 
-	expr getExpr(context& c);
+	expr getExpr(context& c, solver& s);
 	string getDepth(bool isDepth = true);
 };
 
+class PathNode {
+
+protected:
+	string value;
+public:
+	//static context* ctx;
+
+	virtual expr_vector toZ3(EVisitor& visitor) = 0;
+	virtual string DepthFS(bool isDepth = true) = 0;
+	virtual string getValue() { return value; };
+};
+
+class StmtNode : public PathNode {
+public:
+	StmtNode(string value) {
+		this->value = value;
+	}
+	string DepthFS(bool isDepth = true) { return value; }
+	expr_vector toZ3(EVisitor& visitor);
+};
+
+
+class CondNode : public PathNode {
+public:
+	static map<string, string> m;
+
+	CondNode(string cond) {
+		this->value = cond;
+	}
+	string DepthFS(bool isDepth = true) { return "{" + value + "}"; };
+	expr_vector toZ3(EVisitor& visitor);
+
+};
+
+class FuncNode : public PathNode {
+	list<PathNode*> children;
+
+public:
+	FuncNode(string value, list<PathNode*> children) {
+		this->value = value;
+		this -> children = children;
+	}
+	string DepthFS(bool isDepth = true);
+	list<PathNode*> getChildrent() { return children; }
+	expr_vector toZ3(EVisitor& visitor);
+};
 #endif

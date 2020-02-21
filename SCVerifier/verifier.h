@@ -21,9 +21,9 @@ using namespace std;
 using namespace z3;
 using namespace antlr4;
 
-enum Type { UINT, INT, BOOL, ADDRESS, BYTES, STRING, VOID };
 
 class EVisitor;
+struct TypeInfo;
 struct ExpInfo {
 	vector<string> codeActivates;
 	Json::Value exp;
@@ -36,10 +36,6 @@ struct SolEncode {
 	~SolEncode() {};
 };
 
-struct TypeInfo {
-	Type type;
-	unsigned int size;
-};
 
 struct Verifier {
 	int index;
@@ -89,7 +85,10 @@ private:
 
 	check_result solvePath(list<PathNode*> path);
 	expr_vector treeNodeSolve(list<PathNode*> funcCodes, EVisitor& visitor);
-	list<PathNode*> convertToPath(string path);
+	list<PathNode*> convertToPath(string path, model m);
+	expr_vector convertFuncCall(string var);
+	bool mapTraceToCode(list<PathNode*> path, string traces, map<string, string>& m);
+	expr removeOldSol(model& m, expr_vector vars);
 
 	list<TreeNode*> visit(Json::Value ctx, int depth);
 	

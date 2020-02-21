@@ -69,6 +69,15 @@ string getCode(Json::Value ctx, Verifier& global) {
 	return result;
 }
 
+string getCode(Json::Value ctx, string sourceCode)
+{
+	vector<string> location;
+	split(ctx["src"].asString(), location, ':');
+	string result = sourceCode.substr(stoi(location[0]), stoi(location[1]));
+	result.erase(remove_if(result.begin(), result.end(), ::isspace), result.end());
+	return result;
+}
+
 void addExp(Json::Value exp, string codeExcute, bool isTrue, Verifier& global) {
 	string codeExp = getCode(exp, global);
 	if (!isTrue)
@@ -353,13 +362,22 @@ Json::Value createAssert(Json::Value param)
 	return assert_;
 }
 
-Json::Value createUnary(Json::Value param)
+Json::Value createUnary(Json::Value param, string op)
 {
 	Json::Value unary;
 	unary["nodeType"] = "UnaryOperation";
 	unary["subExpression"] = param;
 	unary["typeDescriptions"] = param["typeDescriptions"];
+	unary["operator"] = op;
 	return unary;
+}
+
+Json::Value createExprStmt(Json::Value param)
+{
+	Json::Value exprStmt;
+	exprStmt["nodeType"] = "ExpressionStatement";
+	exprStmt["expression"] = param;
+	return exprStmt;
 }
 
 
