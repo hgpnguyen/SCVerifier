@@ -211,9 +211,31 @@ expr EVisitor::assignment(Json::Value code, bool isLeft)
 expr EVisitor::binaryOp(Json::Value code, bool isLeft)
 {
 	auto op = getOpConvert();
+	TypeInfo typeLeft = getType(code["leftExpression"]);
+	TypeInfo typeRight = getType(code["rightExpression"]);
+	string expOP = code["operator"].asString();
+	if (typeRight.type == BYTES && (expOP == "<" || expOP == "<=" || expOP == ">" || expOP == ">=")) 
+		expOP = "u" + expOP;
+
 	expr left = visit(code["leftExpression"], isLeft);
 	expr right = visit(code["rightExpression"], isLeft);
-	expr result = op[code["operator"].asString()](left, right);
+
+	pair<expr*, TypeInfo> pairL = { &left, typeLeft };
+	pair<expr*, TypeInfo> pairR = { &right, typeRight };
+
+	preCheck(pairL, pairR, expOP);
+	if (left.is_bv() || right.is_bv()) {
+		cout << "Left: " << left << endl;
+		cout << "Right: " << right << endl;
+	}
+	/*if (pairL.first.is_bv() && pairR.first.is_bv() && pairL.second.size != pairR.second.size)
+		if (pairL.second.size > pairR.second.size) {
+			right = to_expr(right.ctx(), Z3_mk_zero_ext(right.ctx(), pairL.second.size - pairR.second.size, right));
+			cout << "Right2: " << right << endl;
+			expr tem = z3::ugt(left, right);
+		}
+		else left = to_expr(left.ctx(), Z3_mk_zero_ext(left.ctx(), pairR.second.size - pairL.second.size, left));*/
+	expr result = op[expOP](left, right);
 	return result;
 }
 

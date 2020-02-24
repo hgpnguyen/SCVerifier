@@ -65,7 +65,7 @@ expr LoopNode::getExpr(context& c, solver& s)
 	expr_vector vec(c);
 	for (auto child : childrens)
 		vec.push_back(child->getExpr(c, s));
-	return concat(vec).loop(10);
+	return concat(vec).loop(5);
 }
 
 string SubNode::DepthFS(bool isDepth)

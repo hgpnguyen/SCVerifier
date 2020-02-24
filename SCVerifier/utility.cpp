@@ -347,6 +347,33 @@ vector<string> splitExp(string str_exp) { // split exp string into mutiple compo
 	return cont;
 }
 
+void int2Bv(pair<expr*, TypeInfo>& p, int size) {
+	*p.first = to_expr(p.first->ctx(), Z3_mk_int2bv(p.first->ctx(), size == NULL ? p.second.size : size, *p.first));
+	p.second.type = BYTES;
+}
+
+void extend(pair<expr*, TypeInfo>& p, unsigned int i) {
+	*p.first = to_expr(p.first->ctx(), Z3_mk_zero_ext(p.first->ctx(), i, *p.first));
+	p.second.size += i;
+}
+
+void preCheck(pair<expr*, TypeInfo>& l, pair<expr*, TypeInfo>& r, string op) {
+	string listOP[3] = { "&", "|", "^" };
+	if (listOP->find(op) != string::npos && l.first->is_int() && r.first->is_int()) {
+		int2Bv(l);
+		int2Bv(r);
+	}
+
+	if (l.first->is_bv() && !r.first->is_bv())
+		int2Bv(r, l.second.size);
+	else if (!l.first->is_bv() && r.first->is_bv())
+		int2Bv(l, r.second.size);
+	else if (l.first->is_bv() && r.first->is_bv() && l.second.size != r.second.size)
+		if (l.second.size > r.second.size)
+			extend(r, l.second.size - r.second.size);
+		else extend(l, r.second.size - l.second.size);
+}
+
 Json::Value createAssert(Json::Value param)
 {
 	Json::Value assert_, id;

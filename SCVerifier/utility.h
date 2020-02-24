@@ -44,6 +44,10 @@ vector<string> infixToPostfix(string str_exp);
 expr_vector readTrace(string trace, context& ctx);
 vector<string> splitExp(string str_exp);
 
+void int2Bv(pair<expr*, TypeInfo>& p, int size = NULL);
+void extend(pair<expr*, TypeInfo>& p, unsigned int i);
+void preCheck(pair<expr*, TypeInfo>& l, pair<expr*, TypeInfo>& r, string op);
+
 Json::Value createAssert(Json::Value param);
 Json::Value createUnary(Json::Value param, string op);
 Json::Value createExprStmt(Json::Value param);

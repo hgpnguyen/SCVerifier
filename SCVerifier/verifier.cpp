@@ -81,9 +81,9 @@ void Verifier::checkTrace(vector<pair<string, string>> traces, TreeRoot& functio
 	cout << "Trace: " << traces_expr << endl;
 	expr func = functionTree.getExpr(ctx, s);
 	s.add(in_re(concat(traces_expr), func));
-	auto result = s.check();
-	cout << result << endl;
-	while (s.check() == sat) {
+	check_result result;
+	while ((result = s.check()) == sat) {
+		cout << result << endl;
 		model m = s.get_model();
 		int index = 0;
 		list<PathNode*> path;
@@ -312,9 +312,8 @@ bool Verifier::mapTraceToCode(list<PathNode*> path, string traces, map<string, s
 expr Verifier::removeOldSol(model& m, expr_vector vars)
 {
 	expr_vector orExp(ctx);
-	for (auto j : vars) {
-		if (j.is_const())
-			orExp.push_back(j != m.eval(j));
+	for (int i = 0; i < m.size(); i++) {
+		orExp.push_back(m[i]() != m.eval(m[i]()));
 	}
 	return mk_or(orExp);
 }

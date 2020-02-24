@@ -62,7 +62,7 @@ int main() {
 	for (auto i : cont)
 		cout << i << " ";
 	cout << endl;*/
-	string trace = "T->x = x + 1;{x >= 3}->T";
+	string trace = "T->x = x + 1;{x >= 4}->T";
 	verifier.getAllFunction(root);
 	auto trace_ = verifier.getTraceContrainst(trace);
 	for (auto i : trace_)
@@ -77,6 +77,7 @@ int main() {
 		cout << "Not Depth: " << tree->getDepth(false) << endl;
 		cout << "Depth:     " << tree->getDepth() << endl;
 	}
+	verifier.ctx.set("timeout", 30000);
 	cout << name[1] << endl;
 	verifier.checkTrace(trace_, *listFunc[1]);
 
@@ -85,24 +86,10 @@ int main() {
 
 	// trace: T->a->T
 	context ctx;
-	solver s(ctx);
-	expr A = makeStringFunction(&ctx, "A");
-	expr var = to_re(A);
-	expr val = to_re(ctx.string_val("B"));
-	expr str_var = makeStringFunction(&ctx, "W");
-	expr_vector vec(ctx);
-	expr temp = concat(var, val);
-	cout << temp << endl;
-	s.add(in_re(A, to_re(ctx.string_val("CDF"))));
-	s.add(in_re(str_var, temp));
-	cout << "Model: " << endl;
-	cout << s << endl;
-	cout << s.check() << endl;
-	if (s.check() == sat) {
-		model m = s.get_model();
-		cout << m << endl;
-		cout << m.eval(str_var) << endl;
-	}
+	expr a = ctx.bv_const("a", 128);
+	expr b = ctx.bv_const("b", 128);
+	expr gt = a >= b;
+	cout << gt << endl;
 
 	system("pause");
 	return 0;
