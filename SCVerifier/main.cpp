@@ -89,7 +89,11 @@ int main() {
 	expr a = ctx.bv_const("a", 128);
 	expr b = ctx.bv_const("b", 128);
 	expr gt = a >= b;
-	cout << gt << endl;
+	z3::sort t = ctx.array_sort(ctx.int_sort(), ctx.int_sort());
+	z3::symbol s = ctx.str_symbol("Arr");
+	expr arr = ctx.constant(s, t);
+	expr get = select(arr, ctx.int_val(5));
+	cout << get << endl;
 
 	system("pause");
 	return 0;

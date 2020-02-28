@@ -14,11 +14,12 @@
 using namespace std;
 using namespace z3;
 
-enum Type { UINT, INT, BOOL, ADDRESS, BYTES, STRING, VOID };
+enum Type { UINT, INT, BOOL, ADDRESS, BYTES, STRING, VOID, ARRAY };
 
 struct TypeInfo {
 	Type type;
 	unsigned int size;
+	Type type2 = VOID;
 };
 
 struct Verifier;
@@ -70,14 +71,18 @@ public:
 
 private:
 	expr exprStmt(Json::Value, bool isLeft = false);
+	expr varDeclStmt(Json::Value, bool isLeft = false);
 	expr returnStmt(Json::Value, bool isLeft = false);
 	expr assignment(Json::Value, bool isLeft = false);
 	expr binaryOp(Json::Value, bool isLeft = false);
 	expr unaryOp(Json::Value code, bool isLeft = false);
 	expr identifier(Json::Value code, bool isLeft = false);
+	expr indexAcess(Json::Value code, bool isLeft = false);
 	expr literal(Json::Value code, bool isLeft = false);
 	expr functionCall(Json::Value code, bool isLeft = false);
+	expr varDecl(Json::Value code, bool isLeft = false);
 	expr other(Json::Value code, bool isLeft = false);
+	expr_vector tuppleExp(Json::Value code);
 
 
 

@@ -59,6 +59,7 @@ TreeRoot* convertFunction(Json::Value, int depth);
 
 expr getVar(string varname, TypeInfo type, context& ctx);
 expr getVal(string value, TypeInfo type, context& ctx);
+z3::sort getSort(TypeInfo type, context& ctx);
 TypeInfo getType(Json::Value exp);
 
 
@@ -99,6 +100,9 @@ inline expr bvor(expr l, expr r) { return l | r; }
 inline expr bvand(expr l, expr r) { return l & r; }
 inline expr bvxor(expr l, expr r) { return l ^ r; }
 inline expr bvneg(expr sub, expr) { return ~sub; }
+inline expr uplus2(expr sub, expr) { return sub + 1; }
+inline expr uminus2(expr sub, expr) { return sub - 1; }
+
 
 
 

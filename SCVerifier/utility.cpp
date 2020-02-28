@@ -509,11 +509,20 @@ expr getVar(string varname, TypeInfo type, context& ctx) {
 		expr a = ctx.bv_const(varname.c_str(), type.size);
 		return a;
 	}
+	case STRING:
+	{
+		expr a = makeStringFunction(&ctx, varname);
+		return a;
+	}
+	case ARRAY:
+	{
+		expr a = ctx.constant(ctx.str_symbol(varname.c_str()), getSort(type, ctx));
+		return a;
+	}
 	default:
 	{
-		cout << "Wrong Type: " << type.type << endl;
-		expr a = ctx.int_val(1);
-		return a;
+		throw "Wrong Type: ";
+
 	}
 	}
 }
@@ -530,15 +539,37 @@ expr getVal(string value, TypeInfo type, context& ctx) {
 		return ctx.bv_val(stoi(value, 0, 16), 160);
 	case BYTES:
 		return ctx.bv_val(stoi(value, 0, 16), 256);
+	case STRING:
+		return ctx.string_val(value);
 	default:
 		cout << "Wrong Type: " << type.type << endl;
 		return ctx.int_val(0);
 	}
 }
 
+z3::sort getSort(TypeInfo type, context& ctx)
+{
+	switch (type.type) {
+	case UINT: case INT:
+		return ctx.int_sort();
+	case BOOL:
+		return ctx.bool_sort();
+	case ADDRESS:
+		return ctx.bv_sort(160);
+	case BYTES:
+		return ctx.bv_sort(type.size);
+	case STRING:
+		return ctx.string_sort();
+	case ARRAY:
+		return ctx.array_sort(ctx.int_sort(), getSort({ type.type2, type.size }, ctx));
+	default:
+		throw "WRONG TYPE";
+	}
+}
+
 TypeInfo getType(Json::Value exp) {
 	string type = exp["typeDescriptions"]["typeString"].asString();
-	bool isLiteral = exp["nodeType"].asString() == "Literal";
+	bool isLiteral = exp["nodeType"].asString() == "Literal" || type.find("const") != string::npos;
 	if (type.find("uint") != string::npos)
 		return{ UINT, isLiteral ? 256 : stoul(type.substr(4, type.length())) };
 	if (type.find("int") != string::npos)
@@ -549,8 +580,13 @@ TypeInfo getType(Json::Value exp) {
 		return{ ADDRESS, 160 };
 	if (type.find("bytes") != string::npos)
 		return{ BYTES, stoul(type.substr(5, type.length())) * 8 };
+	if (type.find("literal_string") != string::npos)
+		if (exp["value"].isNull()) 
+			return { BYTES, 256 }; 
+		else 
+			return{ STRING, 256 };
 	if (type.find("string") != string::npos)
-		return{ BYTES, 256 };
+		return { STRING, 256 };
 	if (type.find("tuple()") != string::npos)
 		return{ VOID, 0 };
 	
@@ -584,5 +620,7 @@ map<string, pfunc> getOpConvert()
 	opConvert["u-"] = neg;
 	opConvert["u!"] = notOP;
 	opConvert["u~"] = bvneg;
+	opConvert["u++"] = uplus2;
+	opConvert["u--"] = uminus2;
 	return opConvert;
 }

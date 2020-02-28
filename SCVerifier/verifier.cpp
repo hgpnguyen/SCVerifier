@@ -244,7 +244,8 @@ expr_vector Verifier::treeNodeSolve(list<PathNode*> funcCodes, EVisitor& visitor
 		cout << i->getValue() << " ";
 		expr_vector temp = i->toZ3(visitor);
 		for (auto j : temp)
-			result.push_back(j);
+			if(j.is_bool())
+				result.push_back(j);
 	}
 	return result;
 }

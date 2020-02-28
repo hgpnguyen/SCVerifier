@@ -79,10 +79,6 @@ antlrcpp::Any CalVisitor::visitExpression(SolidityParser::ExpressionContext* ctx
 		expr left = ctx->expression()[0]->accept(this);
 		expr right = ctx->expression()[1]->accept(this);
 		string op = ctx->children[1]->getText();
-		if (right.is_bool())
-			cout << "right is bool" << endl;
-		if (left.is_const())
-			cout << "left is const" << endl;
 		return opConvert[op](left, right);
 	}
 	else if (ctx->expression().size() == 1 && ctx->children[0]->accept(this).is<string>()) { // Unary Op
@@ -167,7 +163,9 @@ expr EVisitor::visit(Json::Value code, bool isLeft)
 	typedef expr(EVisitor::* pfunc)(Json::Value, bool);
 	map<string, pfunc> switchCase;
 	switchCase["ExpressionStatement"] = &EVisitor::exprStmt;
+	switchCase["VariableDeclarationStatement"] = &EVisitor::varDeclStmt;
 	switchCase["Return"] = &EVisitor::returnStmt;
+	switchCase["VariableDeclaration"] = &EVisitor::varDecl;
 	switchCase["Assignment"] = &EVisitor::assignment;
 	switchCase["BinaryOperation"] = &EVisitor::binaryOp;
 	switchCase["UnaryOperation"] = &EVisitor::unaryOp;
@@ -195,6 +193,31 @@ expr EVisitor::exprStmt(Json::Value code, bool isLeft)
 	return visit(code["expression"], isLeft);
 }
 
+expr EVisitor::varDeclStmt(Json::Value code, bool isLeft)
+{
+	expr_vector result(v->ctx), decls(v->ctx), init(v->ctx);
+	for (auto decl : code["declarations"]) {
+		expr varDecl = visit(decl, isLeft);
+		decls.push_back(varDecl);
+	}
+
+	if (!code["initialValue"].isNull())
+		if (code["initialValue"]["nodeType"] == "TupleExpression")
+			init = tuppleExp(code["initialValue"]);
+		else
+			init.push_back(visit(code["initialValue"], isLeft));
+	if (init.empty())
+		return expr(v->ctx);
+	else {
+		assert(decls.size() == init.size());
+		for (int i = 0; i < decls.size(); ++i)
+			result.push_back(decls[i] == init[i]);
+		if (result.size() >= 2)
+			return mk_and(result);
+		else return result[0];
+	}
+}
+
 expr EVisitor::returnStmt(Json::Value code, bool isLeft)
 {
 	return visit(code["expression"], isLeft);;
@@ -202,9 +225,18 @@ expr EVisitor::returnStmt(Json::Value code, bool isLeft)
 
 expr EVisitor::assignment(Json::Value code, bool isLeft)
 {
+	string op = code["operator"].asString();
 	expr right = visit(code["rightHandSide"], isLeft);
-	expr left = visit(code["leftHandSide"], true);
-	expr result = left == right;
+	expr result(v->ctx);
+	if (op == "=") {
+		expr left = visit(code["leftHandSide"], true);
+		result = left == right;
+	}
+	else {
+		expr leftOrig = visit(code["leftHandSide"], false);
+		expr left = visit(code["leftHandSide"], true);
+		result = op == "+=" ? left == leftOrig + right : left == leftOrig - right;
+	}
 	return result;
 }
 
@@ -224,17 +256,6 @@ expr EVisitor::binaryOp(Json::Value code, bool isLeft)
 	pair<expr*, TypeInfo> pairR = { &right, typeRight };
 
 	preCheck(pairL, pairR, expOP);
-	if (left.is_bv() || right.is_bv()) {
-		cout << "Left: " << left << endl;
-		cout << "Right: " << right << endl;
-	}
-	/*if (pairL.first.is_bv() && pairR.first.is_bv() && pairL.second.size != pairR.second.size)
-		if (pairL.second.size > pairR.second.size) {
-			right = to_expr(right.ctx(), Z3_mk_zero_ext(right.ctx(), pairL.second.size - pairR.second.size, right));
-			cout << "Right2: " << right << endl;
-			expr tem = z3::ugt(left, right);
-		}
-		else left = to_expr(left.ctx(), Z3_mk_zero_ext(left.ctx(), pairR.second.size - pairL.second.size, left));*/
 	expr result = op[expOP](left, right);
 	return result;
 }
@@ -243,7 +264,13 @@ expr EVisitor::unaryOp(Json::Value code, bool isLeft)
 {
 	auto op = getOpConvert();
 	expr sub = visit(code["subExpression"], isLeft);
-	expr result = op["u" + code["operator"].asString()](sub, expr(v->ctx));
+	string expOP = code["operator"].asString();
+	expr result = op["u" + expOP](sub, expr(v->ctx));
+
+	if (expOP == "++" || expOP == "--") {
+		expr left = visit(code["subExpression"], true);
+		result = left == result;
+	}
 	return result;
 }
 
@@ -263,6 +290,14 @@ expr EVisitor::identifier(Json::Value code, bool isLeft)
 	}
 }
 
+expr EVisitor::indexAcess(Json::Value code, bool isLeft)
+{
+	expr baseExpr = visit(code["baseExpression"], isLeft);
+	expr index = visit(code["indexExpression"], isLeft);
+	expr result = select(baseExpr, index);
+	return result;
+}
+
 expr EVisitor::literal(Json::Value code, bool isLeft)
 {
 	TypeInfo type = getType(code);
@@ -278,14 +313,33 @@ expr EVisitor::functionCall(Json::Value code, bool isLeft)
 	string name = getCode(code, *v);
 	string varName = encode(name, *v);
 	TypeInfo type = getType(code);
-	expr result = getVar(varName, type, v->ctx);
+	expr result(v->ctx);
+	if (type.type != VOID)
+		result = getVar(varName, type, v->ctx);
+	else result = expr(v->ctx);
 
 	return result;
+}
+
+expr EVisitor::varDecl(Json::Value code, bool isLeft)
+{
+	string name = code["name"].asString();
+	TypeInfo type = getType(code);
+	vars[name] = { type, 0 };
+	return getVar(name + '0', type, v->ctx);
 }
 
 expr EVisitor::other(Json::Value code, bool isLeft)
 {
 	return expr(v->ctx);
+}
+
+expr_vector EVisitor::tuppleExp(Json::Value code)
+{
+	expr_vector result(v->ctx);
+	for (auto i : code["components"])
+		result.push_back(visit(i));
+	return result;
 }
 
 antlrcpp::Any MapVisitor::visitStatement(SolidityParser::StatementContext* ctx)

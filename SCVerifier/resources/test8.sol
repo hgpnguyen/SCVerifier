@@ -37,7 +37,7 @@ contract MyContract {
     function Test() public pure {
         address a;
         bytes10 c;
-        int b;
+        int b = 0;
         string memory f = "dasdasd";
         if (a == address(0)) {
             b = 10;
@@ -51,17 +51,26 @@ contract MyContract {
         if (c > hex'10FA') {
             b = 5;
         }
-        for(int a = 0; a < 10; ++a) {
+        for(int i = 0; i < 5; ++i) {
             b += 1;
         }
     }
 
     function getInt() public pure returns(uint) {
-        uint a;
+        (uint a, uint g) = (2, 5);
         a = 10 * 5;
         return a;
     }
     function getBool() public pure returns(bool) {
         return true;
+    }
+    uint[] x;
+    function array(uint[] memory memoryArray) public {
+        x = memoryArray; // works, copies the whole array to storage
+        uint[] storage y = x; // works, assigns a pointer, data location of y is storage
+        y[7]; // fine, returns the 8th element
+        uint[3] memory g = [uint(1), 3, 4];
+        uint[] memory t;
+        delete x;
     }
 }
