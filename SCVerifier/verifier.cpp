@@ -229,7 +229,7 @@ check_result Verifier::solvePath(list<PathNode*> path)
 {
 	solver s(ctx);
 	map<string, pair<TypeInfo, int>> vars;
-	EVisitor visitor(*this, vars);
+	EVisitor visitor(*this, vars, "");
 	expr_vector vector = treeNodeSolve(path, visitor);
 	cout << vector << endl;
 	auto result = s.check(vector);

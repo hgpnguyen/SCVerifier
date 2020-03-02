@@ -47,6 +47,7 @@ struct Verifier {
 	map<string, vector<string>> functionCodeList;
 	map<string, ExpInfo> expList;
 	map<string, Json::Value> functionsMap;
+	string currentContract;
 	typedef expr(* pfunc) (expr l, expr r);
 
 

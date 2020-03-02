@@ -1,6 +1,7 @@
 #include "tree.h";
 #include "utility.h"
 
+
 /*string TreeRoot::getString()
 {
 	string result = "";
@@ -129,9 +130,11 @@ expr_vector FuncNode::toZ3(EVisitor& visitor)
 	context* ctx = visitor.getContext();
 	expr_vector result(*ctx);
 	TypeInfo type = getType(visitor.toJson(value));
-	
+
+	map< string, pair<TypeInfo, int>> vars;
+	EVisitor newVistor(*visitor.getVer(), vars, value + ".");
 	for (auto child : children) {
-		expr_vector temp = child->toZ3(visitor);
+		expr_vector temp = child->toZ3(newVistor);
 		for (auto i : temp)
 			result.push_back(i);
 	}

@@ -57,17 +57,23 @@ public:
 
 class EVisitor {
 	Verifier* v;
+	string prefix;
 	map < string, pair<TypeInfo, int>> vars;
+	static map < string, pair<TypeInfo, int>> Globalvars;
 public:
-	EVisitor(Verifier& v, map < string, pair<TypeInfo, int>>& vars) {
+
+	EVisitor(Verifier& v, map < string, pair<TypeInfo, int>>& vars, string prefix) {
 		this->v = &v;
 		this->vars = vars;
+		this->prefix = prefix;
 	}
 
 	expr visit(Json::Value code, bool isLeft = false);
 	map < string, pair<TypeInfo, int>> getVars() { return vars; }
+	Verifier* getVer() { return v; }
 	Json::Value toJson(string str);
 	context* getContext();
+	static void addGlobalVar(string name, pair<TypeInfo, int > var) { Globalvars[name] = var; }
 
 private:
 	expr exprStmt(Json::Value, bool isLeft = false);
@@ -84,7 +90,7 @@ private:
 	expr other(Json::Value code, bool isLeft = false);
 	expr_vector tuppleExp(Json::Value code);
 
-
+	pair<TypeInfo, int>* findVar(string name);
 
 };
 

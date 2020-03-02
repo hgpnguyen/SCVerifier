@@ -277,16 +277,18 @@ expr EVisitor::unaryOp(Json::Value code, bool isLeft)
 expr EVisitor::identifier(Json::Value code, bool isLeft)
 {
 	string name = code["name"].asString();
-	if (vars.find(name) != vars.end()) {
-		TypeInfo type = vars[name].first;
-		int num = isLeft ? ++vars[name].second : vars[name].second;
+	auto var = findVar(name);
+	if (var != NULL) {
+		TypeInfo type = var->first;
+		int num = isLeft ? ++var->second : var->second;
 		name = name + to_string(num);
 		return getVar(name, type, v->ctx);
 	}
 	else {
 		TypeInfo type = getType(code);
-		vars[name] = { type, 0 };
-		return getVar(name + '0', type, v->ctx);
+		string newVar = prefix + name;
+		vars[newVar] = { type, 0 };
+		return getVar(newVar + '0', type, v->ctx);
 	}
 }
 
@@ -323,7 +325,7 @@ expr EVisitor::functionCall(Json::Value code, bool isLeft)
 
 expr EVisitor::varDecl(Json::Value code, bool isLeft)
 {
-	string name = code["name"].asString();
+	string name = prefix + code["name"].asString();
 	TypeInfo type = getType(code);
 	vars[name] = { type, 0 };
 	return getVar(name + '0', type, v->ctx);
@@ -340,6 +342,18 @@ expr_vector EVisitor::tuppleExp(Json::Value code)
 	for (auto i : code["components"])
 		result.push_back(visit(i));
 	return result;
+}
+
+pair<TypeInfo, int>* EVisitor::findVar(string name)
+{	
+
+	if (vars.find(prefix + name) != vars.end()) {
+		return &vars[prefix + name];
+	}
+	else if (Globalvars.find(v->currentContract + "." + name) != Globalvars.end()) {
+		return &Globalvars[v->currentContract + "." + name];
+	}
+	return nullptr;
 }
 
 antlrcpp::Any MapVisitor::visitStatement(SolidityParser::StatementContext* ctx)

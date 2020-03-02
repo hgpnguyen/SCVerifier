@@ -32,6 +32,7 @@ void test(string test, Verifier& ver) {
 }
 
 map<string, string> CondNode::m{ };
+map < string, pair<TypeInfo, int>> EVisitor::Globalvars{ };
 
 
 int main() {
