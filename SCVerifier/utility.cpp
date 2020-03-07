@@ -18,7 +18,7 @@ expr makeStringFunction(context* c, string s) {
 	return c->constant(name, sort);
 }
 
-void jsonScan(Json::Value root, Verifier& global) {
+/*void jsonScan(Json::Value root, Verifier& global) {
 	if (root.isObject()) {
 		if (!root.isMember("nodeType"))
 			return;
@@ -38,7 +38,7 @@ void jsonScan(Json::Value root, Verifier& global) {
 			if (i.isArray() || i.isObject())
 				jsonScan(i, global);
 	}
-}
+}*/
 
 void split(const string& str, vector<string>& result, char delim) {
 	stringstream ss(str);
@@ -622,5 +622,6 @@ map<string, pfunc> getOpConvert()
 	opConvert["u~"] = bvneg;
 	opConvert["u++"] = uplus2;
 	opConvert["u--"] = uminus2;
+	opConvert["udelete"] = udelete;
 	return opConvert;
 }

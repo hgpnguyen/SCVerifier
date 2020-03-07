@@ -546,7 +546,8 @@ list<TreeNode*> Verifier::functionCall(Json::Value ctx, int depth)
 	if (ctx["expression"]["nodeType"] == "Identifier" && ctx["expression"]["name"] == "assert")
 		return visit(ctx["arguments"][0], depth);
 	list<TreeNode*> result;
-	string name = ctx["expression"]["name"].asString();
+	string funcName = ctx["expression"]["name"].isNull() ? getCode(ctx["expression"]) : ctx["expression"]["name"].asString();
+	string name = currentContract + "." + funcName;
 	map<string, Json::Value>::iterator iter;
 	if (depth == 0 || (iter = functionsMap.find(name)) == functionsMap.end()) {
 		return list<TreeNode*>();
@@ -563,27 +564,44 @@ list<TreeNode*> Verifier::functionDef(Json::Value ctx, int depth)
 	return visit(ctx["body"], depth);
 }
 
-void Verifier::getAllFunction(Json::Value ast)
+void Verifier::getAllFunction(Json::Value ast, string contractName)
 {
 	if (ast.isObject()) {
 		if (!ast.isMember("nodeType"))
 			return;
 		else if (ast["nodeType"] == "FunctionDefinition" && !ast["body"].isNull()) {
-			string name = ast["name"].asString();
+			string name =  ast["name"].asString();
 			if (ast["kind"].asString() == "constructor")
 				name += "constructor";
-			functionsMap[name] = ast;
+			functionsMap[contractName + "." + name] = ast;
+			contractFuncList[contractName].push_back(name);
+			return;
+		}
+		if (ast["nodeType"] == "ContractDefinition") {
+			getAllFunction(ast["nodes"], ast["name"].asString());
+			return;
+		}
+		if (ast["nodeType"] == "VariableDeclaration") {
+			TypeInfo type;
+			if (ast["typeName"]["nodeType"] == "ElementaryTypeName")
+				type = getType(ast);
+			else if (ast["typeName"]["nodeType"] == "ArrayTypeName") {
+				TypeInfo temp = getType(ast["typeName"]["baseType"]);
+				type = { ARRAY, temp.size, temp.type };
+			}
+			if (type.type != VOID)
+				EVisitor::addGlobalVar(ast["name"].asString(), { type, 0 });
 			return;
 		}
 		for (auto i : ast.getMemberNames()) {
 			if (ast[i].isArray() || ast[i].isObject())
-				getAllFunction(ast[i]);
+				getAllFunction(ast[i], contractName);
 		}
 	}
 	else if (ast.isArray()) {
 		for (auto i : ast)
 			if (i.isArray() || i.isObject())
-				getAllFunction(i);
+				getAllFunction(i, contractName);
 	}
 }
 
@@ -780,6 +798,8 @@ expr Verifier::getVal(string value, TypeInfo type, solver& s) {
 TypeInfo Verifier::getType(Json::Value exp) {
 	string type = exp["typeDescriptions"]["typeString"].asString();
 	bool isLiteral = exp["nodeType"].asString() == "Literal";
+	if (type.find("mapping") != string::npos)
+		return { VOID, 0 };
 	if (type.find("uint") != string::npos)
 		return{ UINT, isLiteral ? 256 : stoul(type.substr(4, type.length())) };
 	if (type.find("int") != string::npos)
@@ -788,11 +808,15 @@ TypeInfo Verifier::getType(Json::Value exp) {
 		return{ BOOL, 1 };
 	if (type.find("address") != string::npos)
 		return{ ADDRESS, 160 };
-	if (type.find("bytes") != string::npos)
-		return{ BYTES, stoul(type.substr(5, type.length())) * 8 };
+	if (type.find("bytes") != string::npos) {
+		string length = type.substr(5, type.length());
+		if (length != "")
+			return{ BYTES, stoul(length) * 8 };
+		else return { ARRAY, 8, BYTES };
+	}
 	if (type.find("string") != string::npos)
 		return{ BYTES, 256 };
-
+	return { VOID, 0 };
 }
 
 string Verifier::getCode(Json::Value ctx) {

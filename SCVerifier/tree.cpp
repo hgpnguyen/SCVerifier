@@ -132,6 +132,7 @@ expr_vector FuncNode::toZ3(EVisitor& visitor)
 	TypeInfo type = getType(visitor.toJson(value));
 
 	map< string, pair<TypeInfo, int>> vars;
+	cout << visitor.toJson(value) << endl;
 	EVisitor newVistor(*visitor.getVer(), vars, value + ".");
 	for (auto child : children) {
 		expr_vector temp = child->toZ3(newVistor);

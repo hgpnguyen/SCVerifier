@@ -41,12 +41,13 @@ struct Verifier {
 	int index;
 	string sourceCode;
 	context ctx;
-	vector<SolEncode> Lencode;
+	vector<SolEncode> Lencode; //remove
 	map<string, string> encodeSol;
 	map<string, Json::Value> decodeSol;
 	map<string, vector<string>> functionCodeList;
 	map<string, ExpInfo> expList;
 	map<string, Json::Value> functionsMap;
+	map<string, vector<string>> contractFuncList;
 	string currentContract;
 	typedef expr(* pfunc) (expr l, expr r);
 
@@ -56,7 +57,7 @@ struct Verifier {
 	void checkTrace(vector<pair<string, string>> traces, TreeRoot& functionTree);
 	bool checkCondofTrace(string traces_str, model m, expr_vector vars, string path);
 	expr_vector readTrace(string trace, solver& s);
-	void getAllFunction(Json::Value ast);
+	void getAllFunction(Json::Value ast, string contractName);
 	TreeRoot* convertFunction(Json::Value func, int depth);
 	void testSolvePath(list<PathNode*> path);
 private:

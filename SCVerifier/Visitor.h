@@ -83,14 +83,17 @@ private:
 	expr binaryOp(Json::Value, bool isLeft = false);
 	expr unaryOp(Json::Value code, bool isLeft = false);
 	expr identifier(Json::Value code, bool isLeft = false);
-	expr indexAcess(Json::Value code, bool isLeft = false);
+	expr indexAccess(Json::Value code, bool isLeft = false);
 	expr literal(Json::Value code, bool isLeft = false);
 	expr functionCall(Json::Value code, bool isLeft = false);
 	expr varDecl(Json::Value code, bool isLeft = false);
+	expr memberAccess(Json::Value code, bool isLeft = false);
 	expr other(Json::Value code, bool isLeft = false);
 	expr_vector tuppleExp(Json::Value code);
 
-	pair<TypeInfo, int>* findVar(string name);
+
+
+	int findVar(string name);
 
 };
 

@@ -102,6 +102,7 @@ inline expr bvxor(expr l, expr r) { return l ^ r; }
 inline expr bvneg(expr sub, expr) { return ~sub; }
 inline expr uplus2(expr sub, expr) { return sub + 1; }
 inline expr uminus2(expr sub, expr) { return sub - 1; }
+inline expr udelete(expr sub, expr) { return expr(sub.ctx()); }
 
 
 

@@ -36,7 +36,7 @@ map < string, pair<TypeInfo, int>> EVisitor::Globalvars{ };
 
 
 int main() {
-	string smartContract = "test8", sourceCode;
+	string smartContract = "Puzzle", sourceCode;
 	Json::Value root;
 	root = readJson(smartContract + ".sol_json.ast");
 	ifstream f("resources/" + smartContract + ".sol");
@@ -63,24 +63,29 @@ int main() {
 	for (auto i : cont)
 		cout << i << " ";
 	cout << endl;*/
-	string trace = "T->x = x + 1;{x >= 4}->T";
-	verifier.getAllFunction(root);
+	string trace = "T->x = x + 1;{x < 1}->T";
+	verifier.getAllFunction(root, "");
 	auto trace_ = verifier.getTraceContrainst(trace);
 	for (auto i : trace_)
 		cout << i.first << " " <<  i.second << endl;
 	vector<TreeRoot *> listFunc;
 	vector<string> name;
-	for (auto key : extract_keys(verifier.functionsMap)) {
-		cout << key << " " << verifier.functionsMap[key]["name"].asString() << endl;
-		auto tree = verifier.convertFunction(verifier.functionsMap[key], 1);
-		listFunc.push_back(tree);
-		name.push_back(key);
-		cout << "Not Depth: " << tree->getDepth(false) << endl;
-		cout << "Depth:     " << tree->getDepth() << endl;
+	for (auto key : extract_keys(verifier.contractFuncList)) {
+		verifier.currentContract = key;
+		cout << "Contract: " << key << endl;
+		for (auto i : verifier.contractFuncList[key]) {
+			cout << i << " " << verifier.functionsMap[key + "." + i]["name"].asString() << endl;
+			auto tree = verifier.convertFunction(verifier.functionsMap[key + "." + i], 1);
+			listFunc.push_back(tree);
+			name.push_back(i);
+			cout << "Not Depth: " << tree->getDepth(false) << endl;
+			cout << "Depth:     " << tree->getDepth() << endl;
+			verifier.checkTrace(trace_, *tree);
+		}
 	}
-	verifier.ctx.set("timeout", 30000);
-	cout << name[1] << endl;
-	verifier.checkTrace(trace_, *listFunc[1]);
+	/*verifier.ctx.set("timeout", 30000);
+	cout << name[6] << endl;
+	verifier.checkTrace(trace_, *listFunc[6]);*/
 
 	//string test_str = "uint y; uint x; y = 0; x = y + 1; x = x + 1; x = x + 1; x = simple();";
 	//test(test_str, verifier);

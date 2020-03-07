@@ -6,23 +6,26 @@ contract MyContract {
         uint moreInfo;
     }
     StructType s;
+    uint global;
+    uint y;
 
-    function add() public pure {
+    function add() public {
         uint y;
         uint x;
-        y = 0;
+        y = 2;
         x = y + 1;
         if(true)
             x = x + 1;
         x = x + 1;
         x = simple();
+        
     }
 
     function simple() public pure returns(uint) {
         return 5;
     }
 
-    function unsat() public pure returns (uint) {
+    function unsat() public returns (uint) {
         uint a; uint b;
         uint c;
         a = a + 10 - b * 25;
