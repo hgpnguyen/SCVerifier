@@ -78,12 +78,11 @@ void Verifier::checkTrace(vector<pair<string, string>> traces, TreeRoot& functio
 		}
 	
 	
-	cout << "Trace: " << traces_expr << endl;
 	expr func = functionTree.getExpr(ctx, s);
 	s.add(in_re(concat(traces_expr), func));
 	check_result result;
+	cout << s.check() << endl;
 	while ((result = s.check()) == sat) {
-		cout << result << endl;
 		model m = s.get_model();
 		int index = 0;
 		list<PathNode*> path;
@@ -99,23 +98,26 @@ void Verifier::checkTrace(vector<pair<string, string>> traces, TreeRoot& functio
 			else path.push_back(new CondNode(i.second));
 		}
 		//PathNode::ctx = &ctx;
+		if (checkTrToCode) {
 
-		cout << "Model: " << m << endl;
-		cout << "Path: ";
-		for (auto i : path)
-			cout << i->DepthFS() << " ";
-		cout << endl;
+			cout << "Model: " << m << endl;
+			cout << "Path: ";
+			for (auto i : path)
+				cout << i->DepthFS() << " ";
+			cout << endl;
+		}
 
 		if (!checkTrToCode || !solvePath(path)) {
 			s.add(removeOldSol(m, traces_expr));
 
 		}
 		else {
-			cout << "Find Solution" << endl;
+			cout << "SAT" << endl;
+			cout << endl;
 			return;
 		}
-	
 	}
+	cout << endl;
 }
 
 expr_vector Verifier::getAllPath(expr exp) {
@@ -233,7 +235,7 @@ check_result Verifier::solvePath(list<PathNode*> path)
 	expr_vector vector = treeNodeSolve(path, visitor);
 	cout << vector << endl;
 	auto result = s.check(vector);
-	cout << result << endl;
+	if (result != sat) cout << result << endl;
 	return result;
 }
 
@@ -241,7 +243,6 @@ expr_vector Verifier::treeNodeSolve(list<PathNode*> funcCodes, EVisitor& visitor
 {
 	expr_vector result(ctx);
 	for (auto i : funcCodes) {
-		cout << i->getValue() << " ";
 		expr_vector temp = i->toZ3(visitor);
 		for (auto j : temp)
 			if(j.is_bool())
@@ -287,12 +288,6 @@ bool Verifier::mapTraceToCode(list<PathNode*> path, string traces, map<string, s
 {
 	vector<string> cont;
 	split(traces, cont, ';');
-	for (auto i : cont)
-		cout << i << " ";
-	cout << endl;
-	for (auto i : path)
-		cout << i->getValue() << " ";
-	cout << endl;
 	assert(path.size() == cont.size());
 	int index = 0;
 	for (auto p : path) {

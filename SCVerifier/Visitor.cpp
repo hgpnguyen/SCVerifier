@@ -259,16 +259,16 @@ expr EVisitor::identifier(Json::Value code, bool isLeft)
 {
 	string name = code["name"].asString();
 	auto num = findVar(name);
-	pair<TypeInfo, int> var;
+	pair<TypeInfo, int>* var;
 	string varname;
 	TypeInfo type;
 	switch(num){
 	case 1: //local var
-		var = vars[prefix + name];
+		var = &vars[prefix + name];
 		varname = prefix + name ;
 		break;
 	case 2: //global var
-		var = Globalvars[v->currentContract + "." + name];
+		var = &Globalvars[v->currentContract + "." + name];
 		varname = name;
 		break;
 	default: //cant find
@@ -277,10 +277,10 @@ expr EVisitor::identifier(Json::Value code, bool isLeft)
 		vars[varname] = { type, 0 };
 		return getVar(varname + '0', type, v->ctx);
 	}
-	type = var.first;
-	int num_ = isLeft ? ++var.second : var.second;
+	type = var->first;
+	int num_ = isLeft ? ++var->second : var->second;
 	varname += to_string(num_);
-	return getVar(name, type, v->ctx);
+	return getVar(varname, type, v->ctx);
 }
 
 expr EVisitor::indexAccess(Json::Value code, bool isLeft)
@@ -436,7 +436,6 @@ antlrcpp::Any MapVisitor::visitExpression(SolidityParser::ExpressionContext* ctx
 		if (json["nodeType"] != "Assignment")
 			return false;
 		(*m)[ctx->expression(0)->getText()] = getCode(json["leftHandSide"], sourceCode);
-		cout << "MAP: " << ctx->expression(0)->getText() << " " << getCode(json["leftHandSide"], sourceCode) << endl;
 		return true;
 	}
 	return false;

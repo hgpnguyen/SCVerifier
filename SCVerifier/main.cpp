@@ -36,7 +36,7 @@ map < string, pair<TypeInfo, int>> EVisitor::Globalvars{ };
 
 
 int main() {
-	string smartContract = "Puzzle", sourceCode;
+	string smartContract = "test8", sourceCode;
 	Json::Value root;
 	root = readJson(smartContract + ".sol_json.ast");
 	ifstream f("resources/" + smartContract + ".sol");
@@ -63,43 +63,38 @@ int main() {
 	for (auto i : cont)
 		cout << i << " ";
 	cout << endl;*/
-	string trace = "T->x = x + 1;{x < 1}->T";
+	string trace = "T->x = x + 1;{x > 5}->T";
 	verifier.getAllFunction(root, "");
 	auto trace_ = verifier.getTraceContrainst(trace);
-	for (auto i : trace_)
-		cout << i.first << " " <<  i.second << endl;
+	cout << "TRACE: ";
+	for (auto i : trace_) {
+		cout << i.first << " ";
+	}
+	cout << endl;
 	vector<TreeRoot *> listFunc;
 	vector<string> name;
+	verifier.ctx.set("timeout", 50000);
 	for (auto key : extract_keys(verifier.contractFuncList)) {
 		verifier.currentContract = key;
 		cout << "Contract: " << key << endl;
 		for (auto i : verifier.contractFuncList[key]) {
-			cout << i << " " << verifier.functionsMap[key + "." + i]["name"].asString() << endl;
+			cout << "Function: " << i << endl;
 			auto tree = verifier.convertFunction(verifier.functionsMap[key + "." + i], 1);
 			listFunc.push_back(tree);
 			name.push_back(i);
 			cout << "Not Depth: " << tree->getDepth(false) << endl;
 			cout << "Depth:     " << tree->getDepth() << endl;
-			verifier.checkTrace(trace_, *tree);
+			//verifier.checkTrace(trace_, *tree);
 		}
 	}
-	/*verifier.ctx.set("timeout", 30000);
-	cout << name[6] << endl;
-	verifier.checkTrace(trace_, *listFunc[6]);*/
+	
+	cout << name[3] << endl;
+	verifier.checkTrace(trace_, *listFunc[3]);
 
 	//string test_str = "uint y; uint x; y = 0; x = y + 1; x = x + 1; x = x + 1; x = simple();";
 	//test(test_str, verifier);
 
 	// trace: T->a->T
-	context ctx;
-	expr a = ctx.bv_const("a", 128);
-	expr b = ctx.bv_const("b", 128);
-	expr gt = a >= b;
-	z3::sort t = ctx.array_sort(ctx.int_sort(), ctx.int_sort());
-	z3::symbol s = ctx.str_symbol("Arr");
-	expr arr = ctx.constant(s, t);
-	expr get = select(arr, ctx.int_val(5));
-	cout << get << endl;
 
 	system("pause");
 	return 0;

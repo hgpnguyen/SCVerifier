@@ -66,7 +66,7 @@ expr LoopNode::getExpr(context& c, solver& s)
 	expr_vector vec(c);
 	for (auto child : childrens)
 		vec.push_back(child->getExpr(c, s));
-	return concat(vec).loop(0, 5);
+	return concat(vec).loop(1, 5);
 }
 
 string SubNode::DepthFS(bool isDepth)
@@ -132,7 +132,6 @@ expr_vector FuncNode::toZ3(EVisitor& visitor)
 	TypeInfo type = getType(visitor.toJson(value));
 
 	map< string, pair<TypeInfo, int>> vars;
-	cout << visitor.toJson(value) << endl;
 	EVisitor newVistor(*visitor.getVer(), vars, value + ".");
 	for (auto child : children) {
 		expr_vector temp = child->toZ3(newVistor);
