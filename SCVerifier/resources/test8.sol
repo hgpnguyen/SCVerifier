@@ -17,7 +17,7 @@ contract MyContract {
         if(true)
             x = x + 1;
         x = x + 1;
-        x = simple();
+        x = getInt();
         
     }
 
@@ -69,11 +69,13 @@ contract MyContract {
     }
     uint[] x;
     function array(uint[] memory memoryArray) public {
-        x = memoryArray; // works, copies the whole array to storage
         uint[] storage y = x; // works, assigns a pointer, data location of y is storage
         y[7]; // fine, returns the 8th element
         uint[3] memory g = [uint(1), 3, 4];
         uint[] memory t;
+        uint k;
+        g[1] += 5;
+        k = g[2];
         delete x;
     }
 }

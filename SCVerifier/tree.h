@@ -98,14 +98,45 @@ public:
 
 class TreeRoot {
 	list<TreeNode*> childrens;
+	map<string, string> encodeSol;
+	map<string, Json::Value> decodeSol;
+	map<string, Json::Value> functionsMap;
+	int index = 0;
 
 public:
 	TreeRoot(list<TreeNode*>& childrens) {
 		this->childrens = childrens;
 	}
+	TreeRoot(Json::Value ast, int depth, map<string, Json::Value> functionsMap) {
+		this->functionsMap = functionsMap;
+		this->childrens = visit(ast, depth);
+	}
 
 	expr getExpr(context& c, solver& s);
 	string getDepth(bool isDepth = true);
+	map<string, string> getEncode(){ return encodeSol; }
+	map<string, Json::Value>* getDecode() { return &decodeSol; }
+
+private:
+	list<TreeNode*> visit(Json::Value ctx, int depth);
+
+	list<TreeNode*> block(Json::Value ctx, int depth);
+	list<TreeNode*> ifStmt(Json::Value ctx, int depth);
+	list<TreeNode*> forStmt(Json::Value ctx, int depth);
+	list<TreeNode*> whileStmt(Json::Value ctx, int depth);
+	list<TreeNode*> doWhileStmt(Json::Value ctx, int depth);
+	list<TreeNode*> returnStmt(Json::Value ctx, int depth);
+	list<TreeNode*> exprStmt(Json::Value ctx, int depth);
+	list<TreeNode*> assignment(Json::Value ctx, int depth);
+	list<TreeNode*> binaryOp(Json::Value ctx, int depth);
+	list<TreeNode*> unaryOp(Json::Value ctx, int depth);
+	list<TreeNode*> otherStmt(Json::Value ctx, int depth);
+
+	list<TreeNode*> functionCall(Json::Value ctx, int depth);
+	list<TreeNode*> functionDef(Json::Value ctx, int depth);
+
+	string encode(string code);
+	string encodeExt(string code, Json::Value ctx);
 };
 
 class PathNode {
@@ -115,7 +146,7 @@ protected:
 public:
 	//static context* ctx;
 
-	virtual expr_vector toZ3(EVisitor& visitor) = 0;
+	virtual expr_vector toZ3(EVisitor& visitor, solver& s) = 0;
 	virtual string DepthFS(bool isDepth = true) = 0;
 	virtual string getValue() { return value; };
 };
@@ -126,19 +157,19 @@ public:
 		this->value = value;
 	}
 	string DepthFS(bool isDepth = true) { return value; }
-	expr_vector toZ3(EVisitor& visitor);
+	expr_vector toZ3(EVisitor& visitor, solver& s);
 };
 
 
 class CondNode : public PathNode {
 public:
-	static map<string, string> m;
+	static map<string, Json::Value> m;
 
 	CondNode(string cond) {
 		this->value = cond;
 	}
 	string DepthFS(bool isDepth = true) { return "{" + value + "}"; };
-	expr_vector toZ3(EVisitor& visitor);
+	expr_vector toZ3(EVisitor& visitor, solver& s);
 
 };
 
@@ -152,6 +183,6 @@ public:
 	}
 	string DepthFS(bool isDepth = true);
 	list<PathNode*> getChildrent() { return children; }
-	expr_vector toZ3(EVisitor& visitor);
+	expr_vector toZ3(EVisitor& visitor, solver& s);
 };
 #endif

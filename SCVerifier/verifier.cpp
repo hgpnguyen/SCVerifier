@@ -57,7 +57,8 @@ void Verifier::checkTrace(vector<pair<string, string>> traces, TreeRoot& functio
 	expr_vector traces_expr(ctx);
 
 	expr union_ = ctx.int_val(1);
-	for (auto key : UTILITY_H::extract_keys(decodeSol)) {
+	map<string, Json::Value>* decodeSol = functionTree.getDecode();
+	for (auto key : UTILITY_H::extract_keys(*decodeSol)) {
 		expr re = to_re(ctx.string_val(key));
 		if (union_.is_re())
 			union_ = union_ + re;
@@ -69,6 +70,7 @@ void Verifier::checkTrace(vector<pair<string, string>> traces, TreeRoot& functio
 			expr exp = makeStringFunction(&ctx, t.first);
 			traces_expr.push_back(exp);
 			s.add(!prefixof(ctx.string_val("_"), exp)); // remove situation W1 = "e" and T1 = "_a"
+			s.add(!suffixof(ctx.string_val("_"), exp)); // remove situation W1 = "e_" and T1 = "a"
 		}
 		else if (t.first[0] == 'W') {
 			int num = count(t.second.begin(), t.second.end(), ';');
@@ -81,8 +83,8 @@ void Verifier::checkTrace(vector<pair<string, string>> traces, TreeRoot& functio
 	expr func = functionTree.getExpr(ctx, s);
 	s.add(in_re(concat(traces_expr), func));
 	check_result result;
-	cout << s.check() << endl;
 	while ((result = s.check()) == sat) {
+		std::cout << result << endl;
 		model m = s.get_model();
 		int index = 0;
 		list<PathNode*> path;
@@ -92,22 +94,21 @@ void Verifier::checkTrace(vector<pair<string, string>> traces, TreeRoot& functio
 				path.splice(path.end(), convertToPath(m.eval(traces_expr[index++]).get_string(), m));
 			else if (i.first[0] == 'W') {
 				auto temp = convertToPath(m.eval(traces_expr[index++]).get_string(), m);
-				checkTrToCode = mapTraceToCode(temp, i.second, CondNode::m);
+				checkTrToCode = mapTraceToCode(temp, i.second, *decodeSol);
 				path.splice(path.end(), temp);
 			}
 			else path.push_back(new CondNode(i.second));
 		}
 		//PathNode::ctx = &ctx;
-		if (checkTrToCode) {
 
-			cout << "Model: " << m << endl;
-			cout << "Path: ";
-			for (auto i : path)
-				cout << i->DepthFS() << " ";
-			cout << endl;
-		}
+		cout << "Model: " << m << endl;
+		cout << "Path: ";
+		for (auto i : path)
+			cout << i->DepthFS() << " ";
+		cout << endl;
 
-		if (!checkTrToCode || !solvePath(path)) {
+
+		if (!checkTrToCode || !solvePath(path, *decodeSol, functionTree.getEncode())) {
 			s.add(removeOldSol(m, traces_expr));
 
 		}
@@ -117,6 +118,7 @@ void Verifier::checkTrace(vector<pair<string, string>> traces, TreeRoot& functio
 			return;
 		}
 	}
+	cout << result << endl;
 	cout << endl;
 }
 
@@ -134,7 +136,7 @@ expr_vector Verifier::getAllPath(expr exp) {
 	return vec;
 }
 
-check_result Verifier::checkOnePath(expr_vector trace, expr path, string traces_str, string ungenPath) {
+/*check_result Verifier::checkOnePath(expr_vector trace, expr path, string traces_str, string ungenPath) {
 	solver s(ctx);
 	s.add(concat(trace) == path);
 	while (s.check() == sat) {
@@ -153,9 +155,9 @@ check_result Verifier::checkOnePath(expr_vector trace, expr path, string traces_
 		}
 	}
 	return unsat;
-}
+}*/
 
-expr Verifier::generalization(expr path, map<string, string>& encodeDict, int& index) {
+/*expr Verifier::generalization(expr path, map<string, string>& encodeDict, int& index) {
 	vector<string> splitPath;
 	string strPath = path.get_string();
 	expr_vector newPath(ctx);
@@ -174,7 +176,7 @@ expr Verifier::generalization(expr path, map<string, string>& encodeDict, int& i
 	expr result = concat(newPath);
 	return result;
 
-}
+}*/
 
 SolEncode Verifier::statementEncode(Json::Value c, map<string, string>& encodeDict, int& index) {
 	if (c["nodeType"] == "ExpressionStatement" && c["expression"]["nodeType"] == "Assignment" && assignment(c["expression"])) {
@@ -219,37 +221,22 @@ bool Verifier::expression(Json::Value ctx, string leftId) {
 	return getCode(ctx) == leftId ? true : false;
 }
 
-string Verifier::encodeExt(string code, Json::Value ctx)
-{
-	string enStr = encode(code, encodeSol, index);
-	if (decodeSol.find(enStr) == decodeSol.end())
-		decodeSol[enStr] = ctx;
-	return enStr;
-}
-
-check_result Verifier::solvePath(list<PathNode*> path)
+check_result Verifier::solvePath(list<PathNode*> path, map<string, Json::Value> decodeSol, map<string, string> encodeSol)
 {
 	solver s(ctx);
-	map<string, pair<TypeInfo, int>> vars;
-	EVisitor visitor(*this, vars, "");
-	expr_vector vector = treeNodeSolve(path, visitor);
-	cout << vector << endl;
-	auto result = s.check(vector);
+	EVisitor visitor("", decodeSol, encodeSol, currentContract);
+	for (auto i : path) {
+		expr_vector temp = i->toZ3(visitor, s);
+		for (auto j : temp)
+			if (j.is_bool())
+				s.add(j);
+	}
+	cout << s << endl;
+	auto result = s.check();
 	if (result != sat) cout << result << endl;
 	return result;
 }
 
-expr_vector Verifier::treeNodeSolve(list<PathNode*> funcCodes, EVisitor& visitor)
-{
-	expr_vector result(ctx);
-	for (auto i : funcCodes) {
-		expr_vector temp = i->toZ3(visitor);
-		for (auto j : temp)
-			if(j.is_bool())
-				result.push_back(j);
-	}
-	return result;
-}
 
 list<PathNode*> Verifier::convertToPath(string path, model m)
 {
@@ -262,8 +249,8 @@ list<PathNode*> Verifier::convertToPath(string path, model m)
 			statement += path.substr(i++, 2);
 		}
 		else {
-			if (decodeSol[statement]["nodeType"] == "FunctionCall") {
-				expr funcVar = m.eval(makeStringFunction(&ctx, statement));
+			expr funcVar = m.eval(makeStringFunction(&ctx, statement));
+			if (funcVar.is_string_value()) {		//Check if statement is a FuntionCall or not/Check if it is a stirng var in model m
 				auto l = convertToPath(funcVar.get_string(), m);
 				result.push_back(new FuncNode(statement, l));
 			}
@@ -271,8 +258,9 @@ list<PathNode*> Verifier::convertToPath(string path, model m)
 			statement = string(1, path[i]);
 		}
 	}
-	if (decodeSol[statement]["nodeType"] == "FunctionCall") {
-		auto l = convertToPath(m.eval(makeStringFunction(&ctx, statement)).get_string(), m);
+	expr funcVar = m.eval(makeStringFunction(&ctx, statement));
+	if (funcVar.is_string_value()) {
+		auto l = convertToPath(funcVar.get_string(), m);
 		result.push_back(new FuncNode(statement, l));
 	}
 	else result.push_back(new StmtNode(statement));
@@ -284,7 +272,7 @@ expr_vector Verifier::convertFuncCall(string var)
 	return expr_vector(ctx);
 }
 
-bool Verifier::mapTraceToCode(list<PathNode*> path, string traces, map<string, string>& m)
+bool Verifier::mapTraceToCode(list<PathNode*> path, string traces, map<string, Json::Value>& decodeSol)
 {
 	vector<string> cont;
 	split(traces, cont, ';');
@@ -297,7 +285,7 @@ bool Verifier::mapTraceToCode(list<PathNode*> path, string traces, map<string, s
 		SolidityParser parser(&tokens);
 		SolidityParser::StatementContext* tree = parser.statement();
 		Json::Value code = decodeSol[p->getValue()];
-		MapVisitor visitor(code, m, sourceCode);
+		MapVisitor visitor(code, CondNode::m);
 		bool result = visitor.visitStatement(tree).as<bool>();
 		if (!result)
 			return false;
@@ -344,220 +332,6 @@ vector<pair<string, string>> Verifier::getTraceContrainst(string traces)
 	return result;
 }
 
-list<TreeNode*> Verifier::visit(Json::Value ctx, int depth)
-{
-	typedef list<TreeNode*> (Verifier::* pfunc)(Json::Value, int);
-	map<string, pfunc> switchCase;
-	switchCase["Block"] = &Verifier::block;
-	switchCase["IfStatement"] = &Verifier::ifStmt;
-	switchCase["ForStatement"] = &Verifier::forStmt;
-	switchCase["ExpressionStatement"] = &Verifier::exprStmt;
-	switchCase["Return"] = &Verifier::returnStmt;
-	switchCase["FunctionCall"] = &Verifier::functionCall;
-	switchCase["FunctionDefinition"] = &Verifier::functionDef;
-	switchCase["Assignment"] = &Verifier::assignment;
-	switchCase["BinaryOperation"] = &Verifier::binaryOp;
-	switchCase["UnaryOperation"] = &Verifier::unaryOp;
-	string nodeType = ctx["nodeType"].asString();
-	auto func = switchCase.find(nodeType) != switchCase.end() ? switchCase[nodeType] : &Verifier::otherStmt;
-	auto result = (this->*func)(ctx, depth);
-	return result;
-}
-
-list<TreeNode*> Verifier::block(Json::Value ctx, int depth)
-{
-	list<TreeNode*> result;
-	for (auto statement : ctx["statements"]) {
-		auto stmt = visit(statement, depth);
-		result.splice(result.end(), stmt);
-	}
-	return result;
-}
-
-/*if(b) {c1}; else {c2}; -> assert(b); c1 | assert(!b); c2*/
-
-list<TreeNode*> Verifier::ifStmt(Json::Value ctx, int depth)
-{
-	list<TreeNode*> result, truebr, falsebr;
-
-	list<TreeNode*> cond = visit(ctx["condition"], depth);
-	list<TreeNode*> cond2(cond);
-	list<TreeNode*> trueCond = visit(ctx["trueBody"], depth);
-	list<TreeNode*> falseCond = !ctx["falseBody"].isNull() ? visit(ctx["falseBody"], depth) : list<TreeNode*>();
-
-	//assert(b); c1 -> t{#b}c1
-	Json::Value assert_ = createExprStmt(createAssert(ctx["condition"]));
-	string cond_str = getCode(ctx["condition"]);
-	string code = "assert(" + cond_str + ");stmt";
-	string enStr = encodeExt(code, assert_);
-	truebr.push_back(new LeafNode(enStr));
-	truebr.splice(truebr.end(), cond);
-	truebr.splice(truebr.end(), trueCond);
-	//assert(!b); c2 -> f{#b}c2
-	Json::Value unary = createUnary(ctx["condition"], "!");
-	assert_ = createExprStmt(createAssert(unary));
-	code = "assert(!" + cond_str + ");stmt";
-	enStr = encodeExt(code, assert_);
-	falsebr.push_back(new LeafNode(enStr));
-	falsebr.splice(falsebr.end(), cond2);
-	falsebr.splice(falsebr.end(), falseCond);
-
-	list<TreeNode*> temp = { new SubNode(truebr), new SubNode(falsebr) };
-	result.push_back(new OrNode(temp));
-
-	return result;
-}
-
-//for(ini;b1;inc) c => ini;while b1 do {c;inc}
-list<TreeNode*> Verifier::forStmt(Json::Value ctx, int depth)
-{
-	list<TreeNode*> result, loop;
-	list<TreeNode*> initExpr = visit(ctx["initializationExpression"], depth);
-	list<TreeNode*> cond = visit(ctx["condition"], depth);
-	list<TreeNode*> cond2(cond);
-	list<TreeNode*> loopExpr = visit(ctx["loopExpression"], depth);
-	list<TreeNode*> body = visit(ctx["body"], depth);
-	string cond_str = getCode(ctx["condition"]);
-
-	//init => e
-	result.splice(result.end(), initExpr);
-
-	//assert(b1);c;inc => t{b1}ab
-	Json::Value assert_ = createExprStmt(createAssert(ctx["condition"]));
-	string code = "assert(" + cond_str + ");stmt";
-	string enStr = encodeExt(code, assert_);
-	loop.push_back(new LeafNode(enStr));
-	loop.splice(loop.end(), cond);
-	loop.splice(loop.end(), body);
-	loop.splice(loop.end(), loopExpr);
-	result.push_back(new LoopNode(loop));
-
-	//assert(!b1) => f{b1}
-	Json::Value unary = createUnary(ctx["condition"], "!");
-	assert_ = createExprStmt(createAssert(unary));
-	code = "assert(!" + cond_str + ");stmt";
-	enStr = encodeExt(code, assert_);
-	result.push_back(new LeafNode(enStr));
-	result.splice(result.end(), cond2);
-
-	return result;
-}
-
-//while b do c => (assert(b);c)*;assert(!b);
-list<TreeNode*> Verifier::whileStmt(Json::Value ctx, int depth)
-{
-	list<TreeNode*> result, loop;
-	list<TreeNode*> cond = visit(ctx["condition"], depth);
-	list<TreeNode*> body = visit(ctx["body"], depth);
-	list<TreeNode*> cond2(cond);
-	string cond_str = getCode(ctx["condition"]);
-
-	//(assert(b);c)* => (t{b}a)*
-	Json::Value assert_ = createExprStmt(createAssert(ctx["condition"]));
-	string code = "assert(" + cond_str + ");stmt";
-	string enStr = encodeExt(code, assert_);
-	loop.push_back(new LeafNode(enStr));
-	loop.splice(loop.end(), cond);
-	loop.splice(loop.end(), body);
-	result.push_back(new LoopNode(loop));
-
-	//assert(!b) => f{b}
-	Json::Value unary = createUnary(ctx["condition"], "!");
-	assert_ = createExprStmt(createAssert(unary));
-	code = "assert(!" + cond_str + ");stmt";
-	enStr = encodeExt(code, assert_);
-	result.push_back(new LeafNode(enStr));
-	result.splice(result.end(), cond2);
-
-	return result;
-}
-
-//do c while b => c; while b do c
-list<TreeNode*> Verifier::doWhileStmt(Json::Value ctx, int depth)
-{
-	list<TreeNode*> result;
-	list<TreeNode*> body = visit(ctx["body"], depth);
-	result.splice(result.end(), body);
-	list<TreeNode*> while_ = whileStmt(ctx, depth);
-	result.splice(result.end(), while_);
-
-	return result;
-}
-
-list<TreeNode*> Verifier::returnStmt(Json::Value ctx, int depth)
-{
-	list<TreeNode*> expr = visit(ctx["expression"], depth);
-	string code = getCode(ctx);
-	string enStr = encodeExt(code, ctx);
-	list<TreeNode*> result = { new LeafNode(enStr) };
-	result.splice(result.end(), expr);
-	return result;
-}
-
-list<TreeNode*> Verifier::exprStmt(Json::Value ctx, int depth)
-{
-	list<TreeNode*> result = otherStmt(ctx, depth);
-	list<TreeNode*> expr = visit(ctx["expression"], depth);
-	result.splice(result.end(), expr);
-	return result;
-}
-
-list<TreeNode*> Verifier::assignment(Json::Value ctx, int depth)
-{
-	list<TreeNode*> result = visit(ctx["rightHandSide"], depth);
-	return result;
-}
-
-list<TreeNode*> Verifier::binaryOp(Json::Value ctx, int depth)
-{
-	list<TreeNode*> left = visit(ctx["leftExpression"], depth);
-	list<TreeNode*> right = visit(ctx["rightExpression"], depth);
-	left.splice(left.end(), right);
-	return left;
-}
-
-list<TreeNode*> Verifier::unaryOp(Json::Value ctx, int depth)
-{
-	return visit(ctx["subExpression"], depth);
-}
-
-list<TreeNode*> Verifier::otherStmt(Json::Value ctx, int depth)
-{
-	if (strstr(ctx["nodeType"].asCString(), "Statement") == NULL) {
-		return list<TreeNode*>();
-	}
-	list<TreeNode*> result;
-	string code = getCode(ctx);
-	code = code + "stmt";
-	string enStr = encode(code, encodeSol, index);
-	result.push_back(new LeafNode(enStr));
-	if (decodeSol.find(enStr) == decodeSol.end())
-		decodeSol[enStr] = ctx;
-	return result;
-}
-
-list<TreeNode*> Verifier::functionCall(Json::Value ctx, int depth)
-{
-	if (ctx["expression"]["nodeType"] == "Identifier" && ctx["expression"]["name"] == "assert")
-		return visit(ctx["arguments"][0], depth);
-	list<TreeNode*> result;
-	string funcName = ctx["expression"]["name"].isNull() ? getCode(ctx["expression"]) : ctx["expression"]["name"].asString();
-	string name = currentContract + "." + funcName;
-	map<string, Json::Value>::iterator iter;
-	if (depth == 0 || (iter = functionsMap.find(name)) == functionsMap.end()) {
-		return list<TreeNode*>();
-	};
-	auto temp = visit(iter->second, depth - 1);
-	string code = getCode(ctx);
-	string enStr = encodeExt(code, ctx);
-	result.push_back(new VarNode(enStr, temp));
-	return result;
-}
-
-list<TreeNode*> Verifier::functionDef(Json::Value ctx, int depth)
-{
-	return visit(ctx["body"], depth);
-}
 
 void Verifier::getAllFunction(Json::Value ast, string contractName)
 {
@@ -568,8 +342,7 @@ void Verifier::getAllFunction(Json::Value ast, string contractName)
 			string name =  ast["name"].asString();
 			if (ast["kind"].asString() == "constructor")
 				name += "constructor";
-			functionsMap[contractName + "." + name] = ast;
-			contractFuncList[contractName].push_back(name);
+			functionsMap[contractName][name] = ast;
 			return;
 		}
 		if (ast["nodeType"] == "ContractDefinition") {
@@ -584,8 +357,10 @@ void Verifier::getAllFunction(Json::Value ast, string contractName)
 				TypeInfo temp = getType(ast["typeName"]["baseType"]);
 				type = { ARRAY, temp.size, temp.type };
 			}
-			if (type.type != VOID)
-				EVisitor::addGlobalVar(ast["name"].asString(), { type, 0 });
+			if (type.type != VOID) {
+				cout << ast["name"].asString() << " " << type.type << endl;
+				EVisitor::addGlobalVar(contractName +  "." + ast["name"].asString(), { type, 0 });
+			}
 			return;
 		}
 		for (auto i : ast.getMemberNames()) {
@@ -600,18 +375,13 @@ void Verifier::getAllFunction(Json::Value ast, string contractName)
 	}
 }
 
-TreeRoot* Verifier::convertFunction(Json::Value func, int depth)
-{
-	auto listTree = visit(func, depth);
-	return new TreeRoot(listTree);
-}
 
 void Verifier::testSolvePath(list<PathNode*> path)
 {
 	//solvePath(path, NULL);
 }
 
-bool Verifier::checkCondofTrace(string traces_str, model m, expr_vector vars, string path) {
+/*bool Verifier::checkCondofTrace(string traces_str, model m, expr_vector vars, string path) {
 	auto listContraint = getConstraints(traces_str, m, vars);
 	map<string, pfunc> opConvert = getOpConvert();
 	map<string, pair<TypeInfo, int>> vars_m;
@@ -639,7 +409,7 @@ bool Verifier::checkCondofTrace(string traces_str, model m, expr_vector vars, st
 	if (s.check() == sat)
 		return true;
 	else return false;
-}
+}*/
 
 vector<pair<string, int>> Verifier::getConstraints(string traces_str, model m, expr_vector vars) {
 	vector <string> cont;
@@ -996,18 +766,19 @@ expr Verifier::convertToExp(string str, map < string, pair<TypeInfo, int>> vars)
 	return result;
 }*/
 
-expr Verifier::calculate(string exp, map < string, pair<TypeInfo, int>> vars) {
+/*expr Verifier::calculate(string exp, map < string, pair<TypeInfo, int>> vars) {
 	ANTLRInputStream input(exp);
 	SolidityLexer lexer(&input);
 	CommonTokenStream tokens(&lexer);
 	SolidityParser parser(&tokens);
 	SolidityParser::ExpressionContext* tree = parser.expression();
 	map<string, string> m;
-	CalVisitor visitor(&ctx, vars, m);
+	solver s(ctx);
+	CalVisitor visitor(&s, vars, m);
 	expr result = visitor.visitExpression(tree).as<expr>();
 
 	return result;
-}
+}*/
 
 void Verifier::increaseVar(solver& s, map < string, pair<TypeInfo, int>>& vars) {
 	for (auto i : extract_keys(vars)) {

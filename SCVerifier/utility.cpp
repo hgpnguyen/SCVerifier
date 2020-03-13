@@ -61,14 +61,6 @@ void split(const std::string& str, vector<string>& cont, string delim)
 }
 
 
-string getCode(Json::Value ctx, Verifier& global) {
-	vector<string> location;
-	split(ctx["src"].asString(), location, ':');
-	string result = global.sourceCode.substr(stoi(location[0]), stoi(location[1]));
-	result.erase(remove_if(result.begin(), result.end(), ::isspace), result.end());
-	return result;
-}
-
 string getCode(Json::Value ctx, string sourceCode)
 {
 	vector<string> location;
@@ -79,7 +71,7 @@ string getCode(Json::Value ctx, string sourceCode)
 }
 
 void addExp(Json::Value exp, string codeExcute, bool isTrue, Verifier& global) {
-	string codeExp = getCode(exp, global);
+	string codeExp = getCode(exp, sourceCode);
 	if (!isTrue)
 		codeExp = "!(" + codeExp + ")";
 	if (global.expList.find(codeExp) == global.expList.end()) {
@@ -89,7 +81,7 @@ void addExp(Json::Value exp, string codeExcute, bool isTrue, Verifier& global) {
 	else global.expList[codeExp].codeActivates.push_back(codeExcute);
 }
 
-SolEncode block(Json::Value ctx, Verifier& global) {
+/*SolEncode block(Json::Value ctx, Verifier& global) {
 	string enStr = "";
 	expr_vector vec(global.ctx);
 	for (auto statement : ctx["statements"]) {
@@ -237,7 +229,7 @@ SolEncode convert(Json::Value ctx, Verifier& global) {
 	auto func = switchCase.find(nodeType) != switchCase.end() ? switchCase[nodeType] : otherStmt;
 	SolEncode regularExp = func(ctx, global);
 	return regularExp;
-}
+}*/
 
 expr_vector readTrace(string trace, context& ctx) {
 	vector <string> cont;

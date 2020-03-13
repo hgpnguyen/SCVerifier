@@ -18,9 +18,9 @@
 using namespace std;
 using namespace z3;
 
+extern string sourceCode;
+
 SolEncode convert(Json::Value ctx, Verifier& global);
-string encode(string code, Verifier& global);
-string getCode(Json::Value ctx, Verifier& global);
 string getCode(Json::Value ctx, string sourceCode);
 Json::Value readJson(string filename);
 expr makeStringFunction(context* c, string s);
@@ -37,7 +37,6 @@ SolEncode expressionStmt(Json::Value ctx, Verifier& global);
 SolEncode otherStmt(Json::Value ctx, Verifier& global);
 bool assignment(Json::Value ctx, Verifier& global);
 bool expression(Json::Value ctx, Verifier& global, string leftId);
-string encode(string code, Verifier& global);
 size_t find(string str, size_t from, map<char, string> m);
 string toRawStr(std::string str);
 vector<string> infixToPostfix(string str_exp);

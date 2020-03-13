@@ -10,7 +10,7 @@ using namespace std;
 using namespace antlr4;
 
 
-void test(string test, Verifier& ver) {
+/*void test(string test, Verifier& ver) {
 
 	vector<string> cont;
 	split(test, cont, ";");
@@ -29,14 +29,14 @@ void test(string test, Verifier& ver) {
 	test_list.push_back(new CondNode("x < 10"));
 	ver.testSolvePath(test_list);
 	cout << endl;
-}
+}*/
 
-map<string, string> CondNode::m{ };
+map<string, Json::Value> CondNode::m{ };
 map < string, pair<TypeInfo, int>> EVisitor::Globalvars{ };
-
+string sourceCode;
 
 int main() {
-	string smartContract = "test8", sourceCode;
+	string smartContract = "test8";
 	Json::Value root;
 	root = readJson(smartContract + ".sol_json.ast");
 	ifstream f("resources/" + smartContract + ".sol");
@@ -46,8 +46,7 @@ int main() {
 	const char* ptn = contents.c_str();
 	string rawStr = toRawStr(contents);
 	Verifier verifier;
-	verifier.sourceCode = rawStr;
-	verifier.index = 0;
+	sourceCode =  rawStr;
 	verifier.ctx.set("timeout", 3000);
 	/*jsonScan(root, verifier);
 	for (auto i : verifier.Lencode)
@@ -63,7 +62,7 @@ int main() {
 	for (auto i : cont)
 		cout << i << " ";
 	cout << endl;*/
-	string trace = "T->x = x + 1;{x > 5}->T";
+	string trace = "T->x = x + 1;{x > 6}->T";
 	verifier.getAllFunction(root, "");
 	auto trace_ = verifier.getTraceContrainst(trace);
 	cout << "TRACE: ";
@@ -71,30 +70,36 @@ int main() {
 		cout << i.first << " ";
 	}
 	cout << endl;
-	vector<TreeRoot *> listFunc;
+	vector<TreeRoot> listFunc;
 	vector<string> name;
-	verifier.ctx.set("timeout", 50000);
-	for (auto key : extract_keys(verifier.contractFuncList)) {
+	verifier.ctx.set("timeout", 3000);
+	for (auto key : extract_keys(verifier.functionsMap)) {
 		verifier.currentContract = key;
 		cout << "Contract: " << key << endl;
-		for (auto i : verifier.contractFuncList[key]) {
+		for (auto i : extract_keys(verifier.functionsMap[key])) {
 			cout << "Function: " << i << endl;
-			auto tree = verifier.convertFunction(verifier.functionsMap[key + "." + i], 1);
+			TreeRoot tree(verifier.functionsMap[key][i], 1, verifier.functionsMap[key]);
 			listFunc.push_back(tree);
 			name.push_back(i);
-			cout << "Not Depth: " << tree->getDepth(false) << endl;
-			cout << "Depth:     " << tree->getDepth() << endl;
+			cout << "Not Depth: " << tree.getDepth(false) << endl;
+			cout << "Depth:     " << tree.getDepth() << endl;
 			//verifier.checkTrace(trace_, *tree);
 		}
 	}
-	
-	cout << name[3] << endl;
-	verifier.checkTrace(trace_, *listFunc[3]);
 
-	//string test_str = "uint y; uint x; y = 0; x = y + 1; x = x + 1; x = x + 1; x = simple();";
-	//test(test_str, verifier);
+	
+	cout << name[2] << endl;
+	auto temp = listFunc[2];
+
+	verifier.checkTrace(trace_, temp);
 
 	// trace: T->a->T
+
+
+
+	//model m = s.get_model();
+	//cout << m << endl;
+
 
 	system("pause");
 	return 0;

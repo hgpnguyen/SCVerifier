@@ -84,7 +84,7 @@ antlrcpp::Any CalVisitor::visitExpression(SolidityParser::ExpressionContext* ctx
 	else if (ctx->expression().size() == 1 && ctx->children[0]->accept(this).is<string>()) { // Unary Op
 		expr subExp = ctx->expression()[0]->accept(this);
 		string op = ctx->children[0]->getText();
-		return opConvert["u" + op](subExp, c->int_val(0));
+		return opConvert["u" + op](subExp, s->ctx().int_val(0));
 	}
 	else if (ctx->primaryExpression())
 		return ctx->primaryExpression()->accept(this);
@@ -102,12 +102,9 @@ antlrcpp::Any CalVisitor::visitNumberLiteral(SolidityParser::NumberLiteralContex
 antlrcpp::Any CalVisitor::visitIdentifier(SolidityParser::IdentifierContext* ctx)
 {
 	assert(traceToCode.find(ctx->getText()) != traceToCode.end());
-	string var_name = traceToCode[ctx->getText()];
-	if (var_m.find(var_name) != var_m.end()) {
-		auto type = var_m[var_name].first;
-		var_name += to_string(var_m[var_name].second);
-		return getVar(var_name, type, *c);
-	}
+	expr var = visitor->visit(traceToCode[ctx->getText()], *s);
+	if (var.to_string().find("temp") == string::npos)
+		return var;
 	else throw "ID not found";
 }
 
@@ -120,6 +117,7 @@ antlrcpp::Any CalVisitor::visitElementaryTypeNameExpression(SolidityParser::Elem
 
 antlrcpp::Any CalVisitor::visitTerminal(antlr4::tree::TerminalNode* ctx) {
 	string text = ctx->getText();
+	context* c = &s->ctx();
 	switch (ctx->getSymbol()->getType())
 	{
 	case SolidityLexer::BooleanLiteral:
@@ -133,9 +131,9 @@ antlrcpp::Any CalVisitor::visitTerminal(antlr4::tree::TerminalNode* ctx) {
 	}
 }
 
-expr EVisitor::visit(Json::Value code, bool isLeft)
+expr EVisitor::visit(Json::Value code, solver& s, bool isLeft)
 {
-	typedef expr(EVisitor::* pfunc)(Json::Value, bool);
+	typedef expr(EVisitor::* pfunc)(Json::Value, solver&s, bool);
 	map<string, pfunc> switchCase;
 	switchCase["ExpressionStatement"] = &EVisitor::exprStmt;
 	switchCase["VariableDeclarationStatement"] = &EVisitor::varDeclStmt;
@@ -151,75 +149,79 @@ expr EVisitor::visit(Json::Value code, bool isLeft)
 	switchCase["MemberAccess"] = &EVisitor::memberAccess;
 	string nodeType = code["nodeType"].asString();
 	auto func = switchCase.find(nodeType) != switchCase.end() ? switchCase[nodeType] : &EVisitor::other;
-	expr result = (this->*func)(code, isLeft);
+	expr result = (this->*func)(code, s, isLeft);
 	return result;
 }
 
 Json::Value EVisitor::toJson(string str)
 {
-	return v->decodeSol[str]; 
+	return decodeSol[str]; 
 }
 
-context* EVisitor::getContext()
+expr EVisitor::exprStmt(Json::Value code, solver& s, bool isLeft)
 {
-	return &v->ctx;
+	return visit(code["expression"], s, isLeft);
 }
 
-expr EVisitor::exprStmt(Json::Value code, bool isLeft)
+expr EVisitor::varDeclStmt(Json::Value code, solver& s, bool isLeft)
 {
-	return visit(code["expression"], isLeft);
-}
-
-expr EVisitor::varDeclStmt(Json::Value code, bool isLeft)
-{
-	expr_vector result(v->ctx), decls(v->ctx), init(v->ctx);
+	expr_vector result(s.ctx()), decls(s.ctx()), init(s.ctx());
 	for (auto decl : code["declarations"]) {
-		expr varDecl = visit(decl, isLeft);
+		expr varDecl = visit(decl, s, isLeft);
 		if (varDecl.to_string() == "null")
-			return expr(v->ctx);
+			return expr(s.ctx());
 		decls.push_back(varDecl);
 	}
 
 	if (!code["initialValue"].isNull())
 		if (code["initialValue"]["nodeType"] == "TupleExpression")
-			init = tuppleExp(code["initialValue"]);
-		else
-			init.push_back(visit(code["initialValue"], isLeft));
+			init = tuppleExp(code["initialValue"], s);
+		else 
+			init.push_back(visit(code["initialValue"], s, isLeft));
 	if (init.empty())
-		return expr(v->ctx);
+		return expr(s.ctx());
 	else {
-		assert(decls.size() == init.size());
-		for (int i = 0; i < decls.size(); ++i)
-			result.push_back(decls[i] == init[i]);
+		if (decls.size() == init.size()) {
+			cout << init[0].get_sort().name() << endl;
+			for (int i = 0; i < decls.size(); ++i)
+				result.push_back(decls[i] == init[i]);
+		}
+		else {
+			
+			if (decls[0].is_array()) {
+				for (int i = 0; i < init.size(); ++i)
+					result.push_back(select(decls[0], s.ctx().int_val(i)) == init[i]);
+			}
+		}
 		if (result.size() >= 2)
 			return mk_and(result);
 		else return result[0];
 	}
 }
 
-expr EVisitor::returnStmt(Json::Value code, bool isLeft)
+expr EVisitor::returnStmt(Json::Value code, solver& s, bool isLeft)
 {
-	return visit(code["expression"], isLeft);;
+	return visit(code["expression"], s, isLeft);;
 }
 
-expr EVisitor::assignment(Json::Value code, bool isLeft)
+expr EVisitor::assignment(Json::Value code, solver& s, bool isLeft)
 {
 	string op = code["operator"].asString();
-	expr right = visit(code["rightHandSide"], isLeft);
-	expr result(v->ctx);
+	expr right = visit(code["rightHandSide"], s, isLeft);
+	expr result(s.ctx());
 	if (op == "=") {
-		expr left = visit(code["leftHandSide"], true);
+		expr left = visit(code["leftHandSide"], s, true);
 		result = left == right;
 	}
 	else {
-		expr leftOrig = visit(code["leftHandSide"], false);
-		expr left = visit(code["leftHandSide"], true);
+		expr leftOrig = visit(code["leftHandSide"], s, false);
+		expr left = visit(code["leftHandSide"], s, true);
 		result = op == "+=" ? left == leftOrig + right : left == leftOrig - right;
 	}
 	return result;
 }
 
-expr EVisitor::binaryOp(Json::Value code, bool isLeft)
+expr EVisitor::binaryOp(Json::Value code, solver& s, bool isLeft)
 {
 	auto op = getOpConvert();
 	TypeInfo typeLeft = getType(code["leftExpression"]);
@@ -228,8 +230,8 @@ expr EVisitor::binaryOp(Json::Value code, bool isLeft)
 	if (typeRight.type == BYTES && (expOP == "<" || expOP == "<=" || expOP == ">" || expOP == ">=")) 
 		expOP = "u" + expOP;
 
-	expr left = visit(code["leftExpression"], isLeft);
-	expr right = visit(code["rightExpression"], isLeft);
+	expr left = visit(code["leftExpression"], s, isLeft);
+	expr right = visit(code["rightExpression"], s, isLeft);
 
 	pair<expr*, TypeInfo> pairL = { &left, typeLeft };
 	pair<expr*, TypeInfo> pairR = { &right, typeRight };
@@ -239,23 +241,23 @@ expr EVisitor::binaryOp(Json::Value code, bool isLeft)
 	return result;
 }
 
-expr EVisitor::unaryOp(Json::Value code, bool isLeft)
+expr EVisitor::unaryOp(Json::Value code, solver& s, bool isLeft)
 {
 	auto op = getOpConvert();
-	expr sub = visit(code["subExpression"], isLeft);
+	expr sub = visit(code["subExpression"], s, isLeft);
 	string expOP = code["operator"].asString();
 	if (op.find("u" + expOP) == op.end())
 		throw "New Unary OP: " + expOP;
-	expr result = op["u" + expOP](sub, expr(v->ctx));
+	expr result = op["u" + expOP](sub, expr(s.ctx()));
 
 	if (expOP == "++" || expOP == "--") {
-		expr left = visit(code["subExpression"], true);
+		expr left = visit(code["subExpression"], s, true);
 		result = left == result;
 	}
 	return result;
 }
 
-expr EVisitor::identifier(Json::Value code, bool isLeft)
+expr EVisitor::identifier(Json::Value code, solver& s, bool isLeft)
 {
 	string name = code["name"].asString();
 	auto num = findVar(name);
@@ -268,79 +270,62 @@ expr EVisitor::identifier(Json::Value code, bool isLeft)
 		varname = prefix + name ;
 		break;
 	case 2: //global var
-		var = &Globalvars[v->currentContract + "." + name];
+		var = &Globalvars[currentContract + "." + name];
 		varname = name;
 		break;
 	default: //cant find
 		type = getType(code);
 		varname = prefix + name;
 		vars[varname] = { type, 0 };
-		return getVar(varname + '0', type, v->ctx);
+		return getVar(varname + '0', type, s.ctx());
 	}
 	type = var->first;
 	int num_ = isLeft ? ++var->second : var->second;
 	varname += to_string(num_);
-	return getVar(varname, type, v->ctx);
+	return getVar(varname, type, s.ctx());
 }
 
-expr EVisitor::indexAccess(Json::Value code, bool isLeft)
+expr EVisitor::indexAccess(Json::Value code, solver& s, bool isLeft)
 {
-	/*expr baseExpr = visit(code["baseExpression"], isLeft);
-	expr index = visit(code["indexExpression"], isLeft);
-	expr result = select(baseExpr, index);
-	return result;*/
-	string name = getCode(code["baseExpression"], v->sourceCode);
-	string fullName = getCode(code, v->sourceCode);
-	auto varNum = findVar(name);
-	auto var = vars.find(prefix + fullName);
-	string varname;
-	TypeInfo type = getType(code);
-	int num;
-	switch (varNum) {
-	case 1: case 3: //local var and cant find
-		if (var == vars.end()) {
-			vars[prefix + fullName] = { type, 0 };
-			num = 0;
-		}
-		else num = isLeft ? ++var->second.second : var->second.second;
-		varname = prefix + fullName + to_string(num);
-		break;
-	default: //global
-		if ((var = Globalvars.find(v->currentContract + fullName)) == Globalvars.end()) {
-			Globalvars[v->currentContract + fullName] = { type, 0 };
-			num = 0;
-		}
-		else num = isLeft ? ++var->second.second : var->second.second;
-		varname = fullName + to_string(num);
-		break;
+	expr baseExpr = visit(code["baseExpression"], s, false);
+	expr index = visit(code["indexExpression"], s, isLeft);
+	if (isLeft) {
+		TypeInfo type = getType(code);
+		string t = "temp" + to_string(tempIndex++);
+		expr temp = s.ctx().constant(s.ctx().str_symbol(t.c_str()), baseExpr.get_sort().array_range());
+		expr store_ = store(baseExpr, index, temp);
+		expr newBaseExpr = visit(code["baseExpression"], s, true);
+		s.add(newBaseExpr == store_);
+		return temp;
 	}
-	return getVar(varname, type, v->ctx);
+	else return select(baseExpr, index);
+
 }
 
-expr EVisitor::literal(Json::Value code, bool isLeft)
+expr EVisitor::literal(Json::Value code, solver& s, bool isLeft)
 {
 	TypeInfo type = getType(code);
 	string value = type.type == BYTES ? code["hexValue"].asString() : code["value"].asString();
-	expr result = getVal(value, type, v->ctx);
+	expr result = getVal(value, type, s.ctx());
 	return result;
 }
 
-expr EVisitor::functionCall(Json::Value code, bool isLeft)
+expr EVisitor::functionCall(Json::Value code, solver& s, bool isLeft)
 {
 	if (code["expression"]["nodeType"] == "Identifier" && code["expression"]["name"] == "assert")
-		return visit(code["arguments"][0]);
-	string name = getCode(code, *v);
-	string varName = encode(name, *v);
+		return visit(code["arguments"][0], s);
+	string name = getCode(code, sourceCode);
+	string varName = encode(name);
 	TypeInfo type = getType(code);
-	expr result(v->ctx);
+	expr result(s.ctx());
 	if (type.type != VOID)
-		result = getVar(varName, type, v->ctx);
-	else result = expr(v->ctx);
+		result = getVar(varName, type, s.ctx());
+	else result = expr(s.ctx());
 
 	return result;
 }
 
-expr EVisitor::varDecl(Json::Value code, bool isLeft)
+expr EVisitor::varDecl(Json::Value code, solver& s, bool isLeft)
 {
 	string name = prefix + code["name"].asString();
 	TypeInfo type;
@@ -350,44 +335,51 @@ expr EVisitor::varDecl(Json::Value code, bool isLeft)
 		TypeInfo temp = getType(code["typeName"]["baseType"]);
 		type = { ARRAY, temp.size, temp.type };
 		vars[name] = { type, 0 };
-		return expr(v->ctx);
+		return getVar(name + '0', type, s.ctx());
 	}
-	else return expr(v->ctx);
+	else return expr(s.ctx());
 	vars[name] = { type, 0 };
-	return getVar(name + '0', type, v->ctx);
+	return getVar(name + '0', type, s.ctx());
 }
 
-expr EVisitor::memberAccess(Json::Value code, bool isLeft)
+expr EVisitor::memberAccess(Json::Value code, solver& s, bool isLeft)
 {
-	string varName = getCode(code, v->sourceCode);
-	varName = encode(varName, *v);
+	string varName = getCode(code, sourceCode);
+	varName = encode(varName);
 	TypeInfo type = getType(code);
-	auto var = Globalvars.find(v->currentContract + varName);
+	auto var = Globalvars.find(currentContract + varName);
 	int num;
 	if (var == Globalvars.end()) {
-		Globalvars[v->currentContract + varName] = { type, 0 };
+		Globalvars[currentContract + varName] = { type, 0 };
 		num = 0;
 	}
 	else num = isLeft ? ++var->second.second : var->second.second;
 	varName += to_string(num);
 
-	return getVar(varName, type, v->ctx);
+	return getVar(varName, type, s.ctx());
 }
 
-expr EVisitor::other(Json::Value code, bool isLeft)
+expr EVisitor::other(Json::Value code, solver& s, bool isLeft)
 {
-	return expr(v->ctx);
+	return expr(s.ctx());
 }
 
-expr_vector EVisitor::tuppleExp(Json::Value code)
+expr_vector EVisitor::tuppleExp(Json::Value code, solver& s)
 {
-	expr_vector result(v->ctx);
+	expr_vector result(s.ctx());
 	for (auto i : code["components"])
-		result.push_back(visit(i));
+		result.push_back(visit(i, s));
 	return result;
 }
 
 
+
+string EVisitor::encode(string code)
+{
+	if (encodeSol.find(code) != encodeSol.end())
+		return encodeSol[code];
+	return "temp" + to_string(tempIndex++);
+}
 
 int EVisitor::findVar(string name)
 {	
@@ -395,7 +387,7 @@ int EVisitor::findVar(string name)
 	if (vars.find(prefix + name) != vars.end()) {
 		return 1; //local var
 	}
-	else if (Globalvars.find(v->currentContract + "." + name) != Globalvars.end()) {
+	else if (Globalvars.find(currentContract + "." + name) != Globalvars.end()) {
 		return 2; //global var
 	}
 	return 3;// cant find
@@ -435,7 +427,7 @@ antlrcpp::Any MapVisitor::visitExpression(SolidityParser::ExpressionContext* ctx
 	if (ctx->expression().size() == 2 && ((op = ctx->children[1]->getText()) == "=" || op == "+=" || op == "-=")) {
 		if (json["nodeType"] != "Assignment")
 			return false;
-		(*m)[ctx->expression(0)->getText()] = getCode(json["leftHandSide"], sourceCode);
+		(*m)[ctx->expression(0)->getText()] = json["leftHandSide"];
 		return true;
 	}
 	return false;

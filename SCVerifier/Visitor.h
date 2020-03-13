@@ -23,6 +23,7 @@ struct TypeInfo {
 };
 
 struct Verifier;
+class EVisitor;
 class Visitor : SolidityBaseVisitor {
 	antlrcpp::Any global = NULL;
 public:
@@ -34,14 +35,14 @@ public:
 };
 
 class CalVisitor : SolidityBaseVisitor {
-	context* c;
-	map < string, pair<TypeInfo, int>> var_m;
-	map<string, string> traceToCode;
+	solver* s;
+	EVisitor* visitor;
+	map<string, Json::Value> traceToCode;
 	
 public:
-	CalVisitor(context* ctx, map < string, pair<TypeInfo, int>> var_m, map<string, string> traceToCode) {
-		c = ctx;
-		this->var_m = var_m;
+	CalVisitor(solver* s, EVisitor* visitor, map<string, Json::Value> traceToCode) {
+		this->s = s;
+		this->visitor = visitor;
 		this->traceToCode = traceToCode;
 	}
 
@@ -56,56 +57,60 @@ public:
 };
 
 class EVisitor {
-	Verifier* v;
 	string prefix;
+	string currentContract;
+	int tempIndex = 0; // To encode Function Call
+	
+	map <string, string> encodeSol; //To encode Function Call
 	map < string, pair<TypeInfo, int>> vars;
+	map <string, Json::Value> decodeSol;
+	
 	static map < string, pair<TypeInfo, int>> Globalvars;
 public:
 
-	EVisitor(Verifier& v, map < string, pair<TypeInfo, int>>& vars, string prefix) {
-		this->v = &v;
-		this->vars = vars;
+	EVisitor(string prefix, map<string, Json::Value>& decodeSol, map<string, string>& encodeSol, string currentContract) {
 		this->prefix = prefix;
+		this->decodeSol = decodeSol;
+		this->encodeSol = encodeSol;
+		this->currentContract = currentContract;
 	}
 
-	expr visit(Json::Value code, bool isLeft = false);
+	expr visit(Json::Value code, solver& s, bool isLeft = false);
 	map < string, pair<TypeInfo, int>> getVars() { return vars; }
-	Verifier* getVer() { return v; }
 	Json::Value toJson(string str);
-	context* getContext();
 	static void addGlobalVar(string name, pair<TypeInfo, int > var) { Globalvars[name] = var; }
+	void resetVar() { vars.clear(); }
 
 private:
-	expr exprStmt(Json::Value, bool isLeft = false);
-	expr varDeclStmt(Json::Value, bool isLeft = false);
-	expr returnStmt(Json::Value, bool isLeft = false);
-	expr assignment(Json::Value, bool isLeft = false);
-	expr binaryOp(Json::Value, bool isLeft = false);
-	expr unaryOp(Json::Value code, bool isLeft = false);
-	expr identifier(Json::Value code, bool isLeft = false);
-	expr indexAccess(Json::Value code, bool isLeft = false);
-	expr literal(Json::Value code, bool isLeft = false);
-	expr functionCall(Json::Value code, bool isLeft = false);
-	expr varDecl(Json::Value code, bool isLeft = false);
-	expr memberAccess(Json::Value code, bool isLeft = false);
-	expr other(Json::Value code, bool isLeft = false);
-	expr_vector tuppleExp(Json::Value code);
+	expr exprStmt(Json::Value, solver& s, bool isLeft = false);
+	expr varDeclStmt(Json::Value, solver& s, bool isLeft = false);
+	expr returnStmt(Json::Value, solver& s, bool isLeft = false);
+	expr assignment(Json::Value, solver& s, bool isLeft = false);
+	expr binaryOp(Json::Value, solver& s, bool isLeft = false);
+	expr unaryOp(Json::Value code, solver& s, bool isLeft = false);
+	expr identifier(Json::Value code, solver& s, bool isLeft = false);
+	expr indexAccess(Json::Value code, solver& s, bool isLeft = false);
+	expr literal(Json::Value code, solver& s, bool isLeft = false);
+	expr functionCall(Json::Value code, solver& s, bool isLeft = false);
+	expr varDecl(Json::Value code, solver& s, bool isLeft = false);
+	expr memberAccess(Json::Value code, solver& s, bool isLeft = false);
+	expr other(Json::Value code, solver& s, bool isLeft = false);
+	expr_vector tuppleExp(Json::Value code, solver& s);
 
 
 
+	string encode(string code);
 	int findVar(string name);
 
 };
 
 class MapVisitor : SolidityBaseVisitor {
 	Json::Value json;
-	map<string, string>* m;
-	string sourceCode;
+	map<string, Json::Value>* m;
 public:
-	MapVisitor(Json::Value json, map<string, string>& m, string sourceCode) {
+	MapVisitor(Json::Value json, map<string, Json::Value>& m) {
 		this->json = json;
 		this->m = &m;
-		this->sourceCode = sourceCode;
 	}
 
 	antlrcpp::Any visitStatement(SolidityParser::StatementContext* ctx);
