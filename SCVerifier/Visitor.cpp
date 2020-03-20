@@ -224,8 +224,8 @@ expr EVisitor::assignment(Json::Value code, solver& s, bool isLeft)
 expr EVisitor::binaryOp(Json::Value code, solver& s, bool isLeft)
 {
 	auto op = getOpConvert();
-	TypeInfo typeLeft = getType(code["leftExpression"]);
-	TypeInfo typeRight = getType(code["rightExpression"]);
+	ValType* typeLeft = getType(code["leftExpression"]);
+	ValType* typeRight = getType(code["rightExpression"]);
 	string expOP = code["operator"].asString();
 	if (typeRight.type == BYTES && (expOP == "<" || expOP == "<=" || expOP == ">" || expOP == ">=")) 
 		expOP = "u" + expOP;

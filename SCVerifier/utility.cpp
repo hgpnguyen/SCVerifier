@@ -339,17 +339,17 @@ vector<string> splitExp(string str_exp) { // split exp string into mutiple compo
 	return cont;
 }
 
-void int2Bv(pair<expr*, TypeInfo>& p, int size) {
-	*p.first = to_expr(p.first->ctx(), Z3_mk_int2bv(p.first->ctx(), size == NULL ? p.second.size : size, *p.first));
-	p.second.type = BYTES;
+void int2Bv(pair<expr*, ValType*>& p, int size) {
+	*p.first = to_expr(p.first->ctx(), Z3_mk_int2bv(p.first->ctx(), size == NULL ? p.second->getSize() : size, *p.first));
+	p.second = &Byte(p.second->getSize());
 }
 
-void extend(pair<expr*, TypeInfo>& p, unsigned int i) {
+void extend(pair<expr*, ValType*>& p, unsigned int i) {
 	*p.first = to_expr(p.first->ctx(), Z3_mk_zero_ext(p.first->ctx(), i, *p.first));
-	p.second.size += i;
+	p.second->changeSize(p.second->getSize() + i);
 }
 
-void preCheck(pair<expr*, TypeInfo>& l, pair<expr*, TypeInfo>& r, string op) {
+void preCheck(pair<expr*, ValType*>& l, pair<expr*, ValType*>& r, string op) {
 	string listOP[3] = { "&", "|", "^" };
 	if (listOP->find(op) != string::npos && l.first->is_int() && r.first->is_int()) {
 		int2Bv(l);
@@ -357,13 +357,13 @@ void preCheck(pair<expr*, TypeInfo>& l, pair<expr*, TypeInfo>& r, string op) {
 	}
 
 	if (l.first->is_bv() && !r.first->is_bv())
-		int2Bv(r, l.second.size);
+		int2Bv(r, l.second->getSize());
 	else if (!l.first->is_bv() && r.first->is_bv())
-		int2Bv(l, r.second.size);
-	else if (l.first->is_bv() && r.first->is_bv() && l.second.size != r.second.size)
-		if (l.second.size > r.second.size)
-			extend(r, l.second.size - r.second.size);
-		else extend(l, r.second.size - l.second.size);
+		int2Bv(l, r.second->getSize());
+	else if (l.first->is_bv() && r.first->is_bv() && l.second->getSize() != r.second->getSize())
+		if (l.second->getSize() > r.second->getSize())
+			extend(r, l.second->getSize() - r.second->getSize());
+		else extend(l, r.second->getSize() - l.second->getSize());
 }
 
 Json::Value createAssert(Json::Value param)
@@ -471,117 +471,29 @@ TreeRoot* convertFunction(Json::Value, int depth)
 	return nullptr;
 }
 
-
-expr getVar(string varname, TypeInfo type, context& ctx) {
-	string var;
-
-	switch (type.type) {
-	case UINT:
-	{
-		expr a = ctx.int_const(varname.c_str());
-		return a;
-	}
-	case INT:
-	{
-		expr a = ctx.int_const(varname.c_str());
-		return a;
-	}
-	case BOOL:
-	{
-		expr a = ctx.bool_const(varname.c_str());
-		return a;
-	}
-	case ADDRESS:
-	{
-		expr a = ctx.bv_const(varname.c_str(), 160);
-		return a;
-	}
-	case BYTES:
-	{
-		expr a = ctx.bv_const(varname.c_str(), type.size);
-		return a;
-	}
-	case STRING:
-	{
-		expr a = makeStringFunction(&ctx, varname);
-		return a;
-	}
-	case ARRAY:
-	{
-		expr a = ctx.constant(ctx.str_symbol(varname.c_str()), getSort(type, ctx));
-		return a;
-	}
-	default:
-	{
-		throw "Wrong Type: ";
-
-	}
-	}
-}
-
-expr getVal(string value, TypeInfo type, context& ctx) {
-	int val;
-	switch (type.type) {
-	case UINT: case INT:
-		val = value.substr(0, 2) == "0x" ? stoi(value, 0, 16) : stoi(value);
-		return ctx.int_val(val);
-	case BOOL:
-		return ctx.bool_val(value == "true");
-	case ADDRESS:
-		return ctx.bv_val(stoi(value, 0, 16), 160);
-	case BYTES:
-		return ctx.bv_val(stoi(value, 0, 16), 256);
-	case STRING:
-		return ctx.string_val(value);
-	default:
-		cout << "Wrong Type: " << type.type << endl;
-		return ctx.int_val(0);
-	}
-}
-
-z3::sort getSort(TypeInfo type, context& ctx)
-{
-	switch (type.type) {
-	case UINT: case INT:
-		return ctx.int_sort();
-	case BOOL:
-		return ctx.bool_sort();
-	case ADDRESS:
-		return ctx.bv_sort(160);
-	case BYTES:
-		return ctx.bv_sort(type.size);
-	case STRING:
-		return ctx.string_sort();
-	case ARRAY:
-		return ctx.array_sort(ctx.int_sort(), getSort({ type.type2, type.size }, ctx));
-	default:
-		throw "WRONG TYPE";
-	}
-}
-
-TypeInfo getType(Json::Value exp) {
+ValType* getType(Json::Value exp) {
 	string type = exp["typeDescriptions"]["typeString"].asString();
 	bool isLiteral = exp["nodeType"].asString() == "Literal" || type.find("const") != string::npos;
 	if (type.find("uint") != string::npos)
-		return{ UINT, isLiteral ? 256 : stoul(type.substr(4, type.length())) };
+		return new UInt(isLiteral ? 256 : stoul(type.substr(4, type.length())) );
 	if (type.find("int") != string::npos)
-		return{ INT, isLiteral ? 256 : stoul(type.substr(3, type.length())) };
+		return new Int(isLiteral ? 256 : stoul(type.substr(3, type.length())));
 	if (type.find("bool") != string::npos)
-		return{ BOOL, 1 };
+		return new Bool() ;
 	if (type.find("address") != string::npos)
-		return{ ADDRESS, 160 };
+		return new Address();
 	if (type.find("bytes") != string::npos)
-		return{ BYTES, stoul(type.substr(5, type.length())) * 8 };
+		return new Byte(stoul(type.substr(5, type.length())) * 8);
 	if (type.find("literal_string") != string::npos)
 		if (exp["value"].isNull()) 
-			return { BYTES, 256 }; 
+			return new Byte(256); 
 		else 
-			return{ STRING, 256 };
+			return new String();
 	if (type.find("string") != string::npos)
-		return { STRING, 256 };
+		return  new String();
 	if (type.find("tuple()") != string::npos)
-		return{ VOID, 0 };
-	
+		throw "Tuple type";
+	throw "Other type: " + type;
 }
 
 map<string, pfunc> getOpConvert()

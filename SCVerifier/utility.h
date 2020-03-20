@@ -43,9 +43,9 @@ vector<string> infixToPostfix(string str_exp);
 expr_vector readTrace(string trace, context& ctx);
 vector<string> splitExp(string str_exp);
 
-void int2Bv(pair<expr*, TypeInfo>& p, int size = NULL);
-void extend(pair<expr*, TypeInfo>& p, unsigned int i);
-void preCheck(pair<expr*, TypeInfo>& l, pair<expr*, TypeInfo>& r, string op);
+void int2Bv(pair<expr*, ValType*>& p, int size = NULL);
+void extend(pair<expr*, ValType*>& p, unsigned int i);
+void preCheck(pair<expr*, ValType*>& l, pair<expr*, ValType*>& r, string op);
 
 Json::Value createAssert(Json::Value param);
 Json::Value createUnary(Json::Value param, string op);
@@ -54,12 +54,7 @@ Json::Value createExprStmt(Json::Value param);
 void getAllFunction(Json::Value ast, map<string, Json::Value>& functionsMap);
 TreeRoot* convertFunction(Json::Value, int depth);
 
-
-
-expr getVar(string varname, TypeInfo type, context& ctx);
-expr getVal(string value, TypeInfo type, context& ctx);
-z3::sort getSort(TypeInfo type, context& ctx);
-TypeInfo getType(Json::Value exp);
+ValType* getType(Json::Value exp);
 
 
 template<typename TK, typename TV>

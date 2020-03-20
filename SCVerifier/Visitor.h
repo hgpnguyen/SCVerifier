@@ -8,19 +8,11 @@
 #include "SolidityBaseVisitor.h"
 #include "c++/z3++.h"
 #include "json/json.h"
-
+#include "type.h"
 
 
 using namespace std;
 using namespace z3;
-
-enum Type { UINT, INT, BOOL, ADDRESS, BYTES, STRING, VOID, ARRAY };
-
-struct TypeInfo {
-	Type type;
-	unsigned int size;
-	Type type2 = VOID;
-};
 
 struct Verifier;
 class EVisitor;
@@ -62,10 +54,10 @@ class EVisitor {
 	int tempIndex = 0; // To encode Function Call
 	
 	map <string, string> encodeSol; //To encode Function Call
-	map < string, pair<TypeInfo, int>> vars;
+	map < string, pair<Type, int>> vars;
 	map <string, Json::Value> decodeSol;
 	
-	static map < string, pair<TypeInfo, int>> Globalvars;
+	static map < string, pair<Type*, int>> Globalvars;
 public:
 
 	EVisitor(string prefix, map<string, Json::Value>& decodeSol, map<string, string>& encodeSol, string currentContract) {
@@ -76,9 +68,9 @@ public:
 	}
 
 	expr visit(Json::Value code, solver& s, bool isLeft = false);
-	map < string, pair<TypeInfo, int>> getVars() { return vars; }
+	map < string, pair<Type, int>> getVars() { return vars; }
 	Json::Value toJson(string str);
-	static void addGlobalVar(string name, pair<TypeInfo, int > var) { Globalvars[name] = var; }
+	static void addGlobalVar(string name, pair<Type*, int > var) { Globalvars[name] = var; }
 	void resetVar() { vars.clear(); }
 
 private:

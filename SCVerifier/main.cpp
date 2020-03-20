@@ -32,7 +32,7 @@ using namespace antlr4;
 }*/
 
 map<string, Json::Value> CondNode::m{ };
-map < string, pair<TypeInfo, int>> EVisitor::Globalvars{ };
+map < string, pair<Type*, int>> EVisitor::Globalvars{ };
 string sourceCode;
 
 int main() {
@@ -118,6 +118,7 @@ int main() {
 	s.add(k);
 	cout << s << endl;
 	cout << s.check() << endl;
+
 
 	system("pause");
 	return 0;
