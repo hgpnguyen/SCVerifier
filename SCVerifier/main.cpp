@@ -4,6 +4,7 @@
 #include "utility.h"
 #include "antlr4-runtime.h"
 #include "Visitor.h"
+#include <bitset>
 
 using namespace z3;
 using namespace std;
@@ -87,11 +88,18 @@ int main() {
 		}
 	}
 
-	
-	cout << name[2] << endl;
-	auto temp = listFunc[2];
+	int num = 5;
+	/*for (int i = 0; i < name.size(); ++i) {
+		cout << name[i] << endl;
+		auto temp = listFunc[i];
+
+		verifier.checkTrace(trace_, temp);
+	}*/
+	cout << name[num] << endl;
+	auto temp = listFunc[num];
 
 	verifier.checkTrace(trace_, temp);
+
 
 	// trace: T->a->T
 
@@ -100,7 +108,7 @@ int main() {
 	//model m = s.get_model();
 	//cout << m << endl;
 
-	context c;
+	/*context c;
 	sort_vector sort_vec(c);
 	sort_vec.push_back(c.bv_sort(160));
 	sort_vec.push_back(c.bv_sort(160));
@@ -117,7 +125,25 @@ int main() {
 	s.add(store(map, vec, const_int) == map);
 	s.add(k);
 	cout << s << endl;
-	cout << s.check() << endl;
+	cout << s.check() << endl;*/
+
+	/*string address = "0xd06cb7A1b2Ccd1D3AF";
+	int len = 256;
+	cout << address.size() << endl;
+
+	//unsigned long long k = strtoull(address.c_str(), 0, 16);
+	//cout << k << endl;
+	context c;
+	//string str_k = to_string(k);
+	auto bool_str = hex_str_to_bool_arr(len, address);
+	for (int i = 0; i < len; i++)
+		cout << bool_str[i];
+	cout << endl;
+	expr bv = c.bv_val("1259841088174951335562403333186447673233413100463", 160);
+	cout << bv << endl;
+	bool bv_arr[] = { true, false, false, true , false};
+	expr bv2 = c.bv_val(len, bool_str);
+	cout << bv2 << endl;*/
 
 
 	system("pause");

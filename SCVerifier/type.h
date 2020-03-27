@@ -28,6 +28,45 @@ public:
 	virtual expr getVal(context& c, string value) = 0;
 	int getSize() { return size; }
 	void changeSize(int size) { this->size = size; }
+
+	bool* hex_str_to_bool_arr(unsigned n, string hex) {
+		bool* arr = new bool[n] {false};
+		string bin_str = hex_str_to_bin_str(hex);
+
+		for (int i = 0; i < bin_str.size(); ++i) {
+			arr[i] = bin_str[bin_str.size() - i - 1] == '0' ? false : true;
+		}
+		return arr;
+	}
+	const char* hex_char_to_bin(char c) {
+		switch (toupper(c))
+		{
+		case '0': return "0000";
+		case '1': return "0001";
+		case '2': return "0010";
+		case '3': return "0011";
+		case '4': return "0100";
+		case '5': return "0101";
+		case '6': return "0110";
+		case '7': return "0111";
+		case '8': return "1000";
+		case '9': return "1001";
+		case 'A': return "1010";
+		case 'B': return "1011";
+		case 'C': return "1100";
+		case 'D': return "1101";
+		case 'E': return "1110";
+		case 'F': return "1111";
+		default: throw "invalid char";
+		}
+	}
+	string hex_str_to_bin_str(const std::string& hex) {
+		std::string bin;
+		string _hex = hex.substr(0, 2) == "0x" ? hex.substr(2) : hex;
+		for (unsigned i = 0; i != _hex.length(); ++i)
+			bin += hex_char_to_bin(_hex[i]);
+		return bin;
+	}
 };
 
 class Int : public ValType {
@@ -37,7 +76,8 @@ public:
 
 	z3::sort getSort(context& c) { return  c.int_sort(); }
 	expr getVar(context& c, string varName) { return c.int_const(varName.c_str()); }
-	expr getVal(context& c, string value) { return c.int_val(value.substr(0, 2) == "0x" ? stoi(value, 0, 16) : stoi(value)); }
+	expr getVal(context& c, string value) { 
+		return value.substr(0, 2) == "0x" ? c.int_val((int64_t)stoull(value, 0, 16)) : c.int_val(value.c_str());; }
 };
 
 class UInt : public ValType {
@@ -46,7 +86,8 @@ public:
 
 	z3::sort getSort(context& c) { return  c.int_sort(); }
 	expr getVar(context& c, string varName) { return c.int_const(varName.c_str()); }
-	expr getVal(context& c, string value) { return c.int_val(value.substr(0, 2) == "0x" ? stoi(value, 0, 16) : stoi(value)); }
+	expr getVal(context& c, string value) { 
+		return value.substr(0, 2) == "0x" ? c.int_val((uint64_t)stoull(value, 0, 16)) : c.int_val(value.c_str()); }
 };
 
 class Bool : public ValType {
@@ -64,7 +105,7 @@ public:
 
 	z3::sort getSort(context& c) { return  c.bv_sort(size); }
 	expr getVar(context& c, string varName) { return c.bv_const(varName.c_str(), size); }
-	expr getVal(context& c, string value) { return c.bv_val(stoi(value, 0, 16), 256); }
+	expr getVal(context& c, string value) { return c.bv_val(256, hex_str_to_bool_arr(256, value)); }
 };
 
 class Address : public ValType {
@@ -73,7 +114,7 @@ public:
 
 	z3::sort getSort(context& c) { return  c.bv_sort(size); }
 	expr getVar(context& c, string varName) { return c.bv_const(varName.c_str(), size); }
-	expr getVal(context& c, string value) { return c.bv_val(stoi(value, 0, 16), 160); }
+	expr getVal(context& c, string value) { return c.bv_val(size, hex_str_to_bool_arr(256, value)); }
 };
 
 class String : public ValType {

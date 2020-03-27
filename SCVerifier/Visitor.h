@@ -16,6 +16,8 @@ using namespace z3;
 
 struct Verifier;
 class EVisitor;
+ValType* getType(Json::Value exp);
+
 class Visitor : SolidityBaseVisitor {
 	antlrcpp::Any global = NULL;
 public:
@@ -54,7 +56,7 @@ class EVisitor {
 	int tempIndex = 0; // To encode Function Call
 	
 	map <string, string> encodeSol; //To encode Function Call
-	map < string, pair<Type, int>> vars;
+	map < string, pair<Type*, int>> vars;
 	map <string, Json::Value> decodeSol;
 	
 	static map < string, pair<Type*, int>> Globalvars;
@@ -68,7 +70,7 @@ public:
 	}
 
 	expr visit(Json::Value code, solver& s, bool isLeft = false);
-	map < string, pair<Type, int>> getVars() { return vars; }
+	map < string, pair<Type*, int>> getVars() { return vars; }
 	Json::Value toJson(string str);
 	static void addGlobalVar(string name, pair<Type*, int > var) { Globalvars[name] = var; }
 	void resetVar() { vars.clear(); }
@@ -88,6 +90,9 @@ private:
 	expr memberAccess(Json::Value code, solver& s, bool isLeft = false);
 	expr other(Json::Value code, solver& s, bool isLeft = false);
 	expr_vector tuppleExp(Json::Value code, solver& s);
+
+	
+	
 
 
 
@@ -112,4 +117,7 @@ public:
 	antlrcpp::Any visitExpression(SolidityParser::ExpressionContext* ctx);
 
 };
+
+
+
 #endif //!VISITOR_H

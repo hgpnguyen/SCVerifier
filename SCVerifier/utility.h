@@ -55,6 +55,11 @@ void getAllFunction(Json::Value ast, map<string, Json::Value>& functionsMap);
 TreeRoot* convertFunction(Json::Value, int depth);
 
 ValType* getType(Json::Value exp);
+Type* getVarDeclType(Json::Value, solver& s);
+
+inline Type* eleType(Json::Value code, solver& s) { return getType(code); }
+inline Type* arrType(Json::Value code, solver& s) { return new Array(getType(code["baseType"])); }
+inline Type* mapType(Json::Value code, solver& s) { return new Map(getVarDeclType(code["keyType"], s), getVarDeclType(code["valueType"], s)); }
 
 
 template<typename TK, typename TV>

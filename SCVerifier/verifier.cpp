@@ -350,15 +350,10 @@ void Verifier::getAllFunction(Json::Value ast, string contractName)
 			return;
 		}
 		if (ast["nodeType"] == "VariableDeclaration") {
-			TypeInfo type;
-			if (ast["typeName"]["nodeType"] == "ElementaryTypeName")
-				type = getType(ast);
-			else if (ast["typeName"]["nodeType"] == "ArrayTypeName") {
-				TypeInfo temp = getType(ast["typeName"]["baseType"]);
-				type = { ARRAY, temp.size, temp.type };
-			}
-			if (type.type != VOID) {
-				cout << ast["name"].asString() << " " << type.type << endl;
+			solver s(ctx);
+			Type* type = getVarDeclType(ast["typeName"], s);
+			if (type != NULL) {
+				cout << ast["name"].asString() << " " << type << endl;
 				EVisitor::addGlobalVar(contractName +  "." + ast["name"].asString(), { type, 0 });
 			}
 			return;
@@ -455,7 +450,7 @@ pair <expr, ValType*> Verifier::convertToZ3(Json::Value exp, solver& s, map<stri
 			type = new Bool();
 		else type = right.second;
 
-		if (typeid(right.second) == typeid(Byte) && (expOP == "<" || expOP == "<=" || expOP == ">" || expOP == ">="))
+		if (typeid(*right.second) == typeid(Byte) && (expOP == "<" || expOP == "<=" || expOP == ">" || expOP == ">="))
 			expOP = "u" + expOP;
 		pair<expr*, ValType*> nLeft = { &left.first, left.second };
 		pair<expr*, ValType*> nRight = { &right.first, right.second };
@@ -485,7 +480,7 @@ pair <expr, ValType*> Verifier::convertToZ3(Json::Value exp, solver& s, map<stri
 	else {
 		ValType* type = getType(exp);
 		if (exp["nodeType"].asString() == "Literal") {
-			string value = typeid(type) == typeid(Byte) ? exp["hexValue"].asString() : exp["value"].asString();
+			string value = typeid(*type) == typeid(Byte) ? exp["hexValue"].asString() : exp["value"].asString();
 			return { type->getVal(ctx, value), type };
 		}
 		else {

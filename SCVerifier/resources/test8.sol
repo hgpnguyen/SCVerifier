@@ -8,6 +8,7 @@ contract MyContract {
     StructType s;
     uint global;
     uint y;
+    mapping(address => mapping (address => uint))  map;
 
     function add() public {
         uint y;
@@ -42,12 +43,6 @@ contract MyContract {
         bytes10 c;
         int b = 0;
         string memory f = "dasdasd";
-        if (a == address(0)) {
-            b = 10;
-        }
-        if (c >= bytes8(uint64(10))) {
-            b = 8;
-        }
         if (getBool()) {
            b = 10;
         }
@@ -71,11 +66,16 @@ contract MyContract {
     function array(uint[] memory memoryArray) public {
         uint[] storage y = x; // works, assigns a pointer, data location of y is storage
         y[7]; // fine, returns the 8th element
-        uint[3] memory g = [uint(1), 3, 4];
+        uint[3] memory g = [uint(1), 1, 4];
         uint[] memory t;
         uint k;
         g[1] += 5;
         k = g[2];
         delete x;
+    }
+
+    function mapTry(address guy) public returns(bool) {
+        map[msg.sender][guy] = 7;
+        return true;
     }
 }

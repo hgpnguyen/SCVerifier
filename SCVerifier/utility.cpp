@@ -1,4 +1,7 @@
 #include "utility.h"
+#include "verifier.h"
+#include "Visitor.h"
+#include "type.h"
 
 
 Json::Value readJson(string filename) {
@@ -492,8 +495,21 @@ ValType* getType(Json::Value exp) {
 	if (type.find("string") != string::npos)
 		return  new String();
 	if (type.find("tuple()") != string::npos)
-		throw "Tuple type";
+		return NULL;
 	throw "Other type: " + type;
+}
+
+Type* getVarDeclType(Json::Value code, solver& s)
+{
+	typedef Type* (*pfunc)(Json::Value, solver& s);
+	map<string, pfunc> switchCase;
+	switchCase["ElementaryTypeName"] = eleType;
+	switchCase["ArrayTypeName"] = arrType;
+	switchCase["Mapping"] = mapType;
+	if (switchCase.find(code["nodeType"].asString()) == switchCase.end())
+		return NULL; //User Define Type;
+	auto func = switchCase[code["nodeType"].asString()];
+	return (*func)(code, s);
 }
 
 map<string, pfunc> getOpConvert()
