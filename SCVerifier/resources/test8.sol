@@ -10,6 +10,16 @@ contract MyContract {
     uint y;
     mapping(address => mapping (address => uint))  map;
 
+    constructor(uint in_) public {
+        global = in_;
+        map[address(this)][msg.sender] = 1 ether;
+    }
+
+    function() external payable {
+        y = 0;
+        y += 4;
+    }
+
     function add() public {
         uint y;
         uint x;

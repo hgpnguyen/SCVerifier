@@ -340,8 +340,8 @@ void Verifier::getAllFunction(Json::Value ast, string contractName)
 			return;
 		else if (ast["nodeType"] == "FunctionDefinition" && !ast["body"].isNull()) {
 			string name =  ast["name"].asString();
-			if (ast["kind"].asString() == "constructor")
-				name += "constructor";
+			if (name == "")
+				name += ast["kind"].asString();
 			functionsMap[contractName][name] = ast;
 			return;
 		}

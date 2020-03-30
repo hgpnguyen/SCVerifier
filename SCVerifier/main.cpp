@@ -95,8 +95,8 @@ int main() {
 
 		verifier.checkTrace(trace_, temp);
 	}*/
-	cout << name[num] << endl;
-	auto temp = listFunc[num];
+	cout << name[0] << endl;
+	auto temp = listFunc[0];
 
 	verifier.checkTrace(trace_, temp);
 
@@ -108,8 +108,6 @@ int main() {
 	//model m = s.get_model();
 	//cout << m << endl;
 
-<<<<<<< HEAD
-=======
 	/*context c;
 	sort_vector sort_vec(c);
 	sort_vec.push_back(c.bv_sort(160));
@@ -147,7 +145,6 @@ int main() {
 	expr bv2 = c.bv_val(len, bool_str);
 	cout << bv2 << endl;*/
 
->>>>>>> Type_custumize
 
 	system("pause");
 	return 0;
