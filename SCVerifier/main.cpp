@@ -100,24 +100,6 @@ int main() {
 	//model m = s.get_model();
 	//cout << m << endl;
 
-	context c;
-	sort_vector sort_vec(c);
-	sort_vec.push_back(c.bv_sort(160));
-	sort_vec.push_back(c.bv_sort(160));
-	z3::sort map_sort = c.array_sort(sort_vec, c.int_sort());
-	expr map = c.constant(c.str_symbol("m"), map_sort);
-	expr a = c.bv_const("a", 160);
-	expr b = c.bv_const("b", 160);
-	expr_vector vec(c);
-	vec.push_back(a);
-	vec.push_back(b);
-	expr k = select(map, vec) == 10;
-	expr const_int = c.int_val(10);
-	solver s(c);
-	s.add(store(map, vec, const_int) == map);
-	s.add(k);
-	cout << s << endl;
-	cout << s.check() << endl;
 
 	system("pause");
 	return 0;
