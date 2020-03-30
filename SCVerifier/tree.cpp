@@ -374,7 +374,7 @@ string FuncNode::DepthFS(bool isDepth)
 expr_vector FuncNode::toZ3(EVisitor& visitor, solver& s)
 {
 	expr_vector result(s.ctx());
-	TypeInfo type = getType(visitor.toJson(value));
+	ValType* type = getType(visitor.toJson(value));
 
 	EVisitor newVistor = visitor;
 	newVistor.resetVar();
@@ -383,8 +383,8 @@ expr_vector FuncNode::toZ3(EVisitor& visitor, solver& s)
 		for (auto i : temp)
 			result.push_back(i);
 	}
-	if (type.type != VOID) {
-		expr funcVar = getVar(value, type, s.ctx());
+	if (type != NULL) {
+		expr funcVar = type->getVar(s.ctx(), value);
 		expr return_ = funcVar == result[result.size() - 1];
 		result.pop_back();
 		result.push_back(return_);

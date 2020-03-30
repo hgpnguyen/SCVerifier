@@ -15,6 +15,7 @@
 #include "SolidityParser.h"
 #include "Visitor.h"
 #include "tree.h"
+#include "type.h"
 
 
 using namespace std;
@@ -23,7 +24,6 @@ using namespace antlr4;
 
 
 class EVisitor;
-struct TypeInfo;
 struct ExpInfo {
 	vector<string> codeActivates;
 	Json::Value exp;
@@ -56,21 +56,15 @@ struct Verifier {
 	void testSolvePath(list<PathNode*> path);
 private:
 
-	pair <expr, TypeInfo> convertToZ3(Json::Value exp, solver& s, map<string, pfunc> opConvert,
-		map<string, pair<TypeInfo, int>>& vars, bool increase = false);
-	expr getVar(string varname, TypeInfo type, solver& s, bool first = false);
-	expr getVal(string value, TypeInfo type, solver& s);
-	TypeInfo getType(Json::Value exp);
+	pair <expr, ValType*> convertToZ3(Json::Value exp, solver& s, map<string, pfunc> opConvert,
+		map<string, pair<Type*, int>>& vars, bool increase = false);
 	string getCode(Json::Value ctx);
 	string encode(string code, map<string, string>& encodeDict, int& index);
-	void int2Bv(pair<expr, TypeInfo>& p, int size = NULL);
-	void extend(pair<expr, TypeInfo>& p, unsigned int i);
-	void preCheck(pair<expr, TypeInfo>& l, pair<expr, TypeInfo>& r, string op);
 	string removeCond(string encodeStr);
 	vector<pair<string, int>> getConstraints(string traces_str, model m, expr_vector vars);
-	expr convertToExp(string str, map < string, pair<TypeInfo, int>> vars);
-	expr calculate(string exp, map < string, pair<TypeInfo, int>> vars);
-	void increaseVar(solver& s, map < string, pair<TypeInfo, int>>& vars);
+	expr convertToExp(string str, map < string, pair<ValType*, int>> vars);
+	expr calculate(string exp, map < string, pair<ValType*, int>> vars);
+	void increaseVar(solver& s, map < string, pair<ValType*, int>>& vars);
 	expr_vector getAllPath(expr exp);
 	check_result checkOnePath(expr_vector traces, expr path, string traces_string, string ungenPath);
 	//expr generalization(expr path, map<string, string>& encodeDict, int& index);
