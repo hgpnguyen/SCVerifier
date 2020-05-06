@@ -20,11 +20,14 @@ ValType* getType(Json::Value exp);
 
 class Visitor : SolidityBaseVisitor {
 	antlrcpp::Any global = NULL;
+	map<string, string> type;
 public:
 	antlrcpp::Any visitStatement(SolidityParser::StatementContext *ctx);
 	antlrcpp::Any visitSimpleStatement(SolidityParser::SimpleStatementContext* ctx);
 	antlrcpp::Any visitExpressionStatement(SolidityParser::ExpressionStatementContext* ctx);
 	antlrcpp::Any visitExpression(SolidityParser::ExpressionContext* ctx);
+	antlrcpp::Any visitTypeDecl(SolidityParser::TypeDeclContext* ctx) { type[ctx->identifier()->getText()] = ctx->elementaryTypeName()->getText(); return NULL; }
+	map<string, string> getType() { return type; }
 	bool generalizeExp(SolidityParser::ExpressionContext* ctx, string leftCode);
 };
 
@@ -32,6 +35,7 @@ class CalVisitor : SolidityBaseVisitor {
 	solver* s;
 	EVisitor* visitor;
 	map<string, Json::Value> traceToCode;
+	ValType* type;
 	
 public:
 	CalVisitor(solver* s, EVisitor* visitor, map<string, Json::Value> traceToCode) {
@@ -58,6 +62,7 @@ class EVisitor {
 	map <string, string> encodeSol; //To encode Function Call
 	map < string, pair<Type*, int>> vars;
 	map <string, Json::Value> decodeSol;
+	unordered_set<string> init; //Use to init Globalvars in each function
 	
 	static map < string, pair<Type*, int>> Globalvars;
 public:
@@ -73,6 +78,7 @@ public:
 	map < string, pair<Type*, int>> getVars() { return vars; }
 	Json::Value toJson(string str);
 	static void addGlobalVar(string name, pair<Type*, int > var) { Globalvars[name] = var; }
+	static pair<Type*, int > findGlobalVar(string name) { if (Globalvars.find(name) != Globalvars.end()) return Globalvars[name]; else return { NULL, -1 }; }
 	void resetVar() { vars.clear(); }
 
 private:
@@ -88,26 +94,28 @@ private:
 	expr functionCall(Json::Value code, solver& s, bool isLeft = false);
 	expr varDecl(Json::Value code, solver& s, bool isLeft = false);
 	expr memberAccess(Json::Value code, solver& s, bool isLeft = false);
+	expr paraList(Json::Value code, solver& s, bool isLeft = false);
+	expr tupleExp(Json::Value code, solver& s, bool isLeft = false);
 	expr other(Json::Value code, solver& s, bool isLeft = false);
 	expr_vector tuppleExp(Json::Value code, solver& s);
 
-	
-	
 
 
-
+	void initCondVar(expr var, solver& s, Type* type);
 	string encode(string code);
 	int findVar(string name);
+	expr memberAccess2(Json::Value code, solver& s, bool isLeft = false);
 
 };
 
 class MapVisitor : SolidityBaseVisitor {
 	Json::Value json;
 	map<string, Json::Value>* m;
+	map<string, string> type;
 public:
-	MapVisitor(Json::Value json, map<string, Json::Value>& m) {
-		this->json = json;
+	MapVisitor(map<string, Json::Value>& m, map<string, string> &type) {
 		this->m = &m;
+		this->type = type;
 	}
 
 	antlrcpp::Any visitStatement(SolidityParser::StatementContext* ctx);
@@ -116,6 +124,11 @@ public:
 	antlrcpp::Any visitExpressionStatement(SolidityParser::ExpressionStatementContext* ctx);
 	antlrcpp::Any visitExpression(SolidityParser::ExpressionContext* ctx);
 
+	void setJson(Json::Value code) { json = code; }
+private:
+	bool mapExpression(SolidityParser::ExpressionContext* ctx, Json::Value ast);
+	bool checkCompat(string, Json::Value ast);
+	bool primaryExpression(SolidityParser::PrimaryExpressionContext* ctx, Json::Value ast);
 };
 
 

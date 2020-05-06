@@ -5,104 +5,172 @@
 #include "antlr4-runtime.h"
 #include "Visitor.h"
 #include <bitset>
+#include "BigInt.h"
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 using namespace z3;
 using namespace std;
 using namespace antlr4;
 
 
-/*void test(string test, Verifier& ver) {
+bool fullCheck(Verifier& verifier, string trace, string constraints, vector<string> name, vector<TreeRoot> listFunc) {
+	auto trace_ = verifier.getTraceContrainst(trace);
+	/*cout << "TRACE: ";
+	for (auto i : trace_) {
+		cout << i.first << " ";
+	}
+	cout << endl;*/
+	for (int i = 0; i < name.size(); ++i) {
+		//cout << name[i] << endl;
+		string contractName = name[i].substr(0, name[i].find('.'));
+		auto temp = listFunc[i];
 
-	vector<string> cont;
-	split(test, cont, ";");
-	cont.pop_back();
-	list<PathNode*> test_list;
 
-	for (auto i : cont) {
-		string temp = i;
-		temp.erase(remove_if(temp.begin(), temp.end(), ::isspace), temp.end());
-		string enStr = encode(temp, ver);
-		cout << temp << " " << enStr << endl;
-		test_list.push_back(new StmtNode(enStr));
+		verifier.currentContract = contractName;
+		bool check = verifier.checkTrace(trace_, constraints, temp);
+		//cout << "-------------------------------------------------------------------------------" << endl;
+		CondNode::m.clear();
+		if (check)
+			return true;
+	}
+	return false;
+}
+
+bool check1(Verifier& verifier, string trace, string constraints, vector<string> name, vector<TreeRoot> listFunc, int index) {
+	auto trace_ = verifier.getTraceContrainst(trace);
+	/*cout << "TRACE: ";
+	for (auto i : trace_) {
+		cout << i.first << " ";
+	}
+	cout << endl;*/
+	string contractName = name[index].substr(0, name[index].find('.'));
+
+	//cout << name[index] << endl;
+	auto temp = listFunc[index];
+	verifier.currentContract = contractName;
+	bool check = verifier.checkTrace(trace_, constraints, temp);
+	//cout << "-------------------------------------------------------------------------------" << endl;
+	CondNode::m.clear();
+	if (check)
+		return true;
+	
+	return false;
+}
+
+pair<int, int> checkContract(string _sourceCode, Json::Value json) {
+	Verifier verifier;
+	sourceCode = _sourceCode;
+
+
+	verifier.getAllFunction(json);
+	vector<TreeRoot> listFunc;
+	vector<string> listContract;
+	for (auto key : extract_keys(verifier.functionsMap)) {
+		verifier.currentContract = key;
+		//cout << "Contract: " << key << endl;
+		for (auto i : extract_keys(verifier.functionsMap[key])) {
+			//cout << "Function: " << i << endl;
+			TreeRoot tree(verifier.functionsMap[key][i], 1, verifier.functionsMap[key]);
+			listContract.push_back(key + "." + i);
+			listFunc.push_back(tree);
+			//cout << "Not Depth: " << tree.getDepth(false) << endl;
+			//cout << "Depth:     " << tree.getDepth() << endl;
+			//verifier.checkTrace(trace_, *tree);
+		}
 	}
 
-
-	test_list.push_back(new CondNode("x < 10"));
-	ver.testSolvePath(test_list);
-	cout << endl;
-}*/
+	int num = 9;
+	string trace = "T->{x <= MAX}x=E;{x > MAX}->T";
+	string trace2 = "T->{x >= MIN}x=E;{x < MIN}->T";
+	string typeConstraint = "int x; expr E;";
+	//check1(verifier, trace2, typeConstraint, listContract, listFunc, 4);
+	int max, min;
+	try {
+		max = fullCheck(verifier, trace, typeConstraint, listContract, listFunc);
+	}
+	catch (std::exception e) {
+		cout << "ERROR" << endl;
+		max = 3;
+	}
+	try {
+		min = fullCheck(verifier, trace2, typeConstraint, listContract, listFunc);
+	}
+	catch (std::exception e) {
+		cout << "ERROR" << endl;
+		min = 3;
+	}
+	return { max, min };
+}
 
 map<string, Json::Value> CondNode::m{ };
 map < string, pair<Type*, int>> EVisitor::Globalvars{ };
 string sourceCode;
 
 int main() {
-	string smartContract = "test8";
-	Json::Value root;
-	root = readJson(smartContract + ".sol_json.ast");
-	ifstream f("resources/" + smartContract + ".sol");
-	f.open("resources/" + smartContract + ".sol");
-	string contents((std::istreambuf_iterator<char>(f)),
-		std::istreambuf_iterator<char>());
-	const char* ptn = contents.c_str();
-	string rawStr = toRawStr(contents);
-	Verifier verifier;
-	sourceCode =  rawStr;
-	verifier.ctx.set("timeout", 3000);
-	/*jsonScan(root, verifier);
-	for (auto i : verifier.Lencode)
-		cout << i.encodeStr << " " << i.regEx  << endl;
-	/*for (auto j : extract_keys(verifier.expList)) {
-		cout << j << " ";
-		verifier.checkSas(j);
-		cout << endl;
-	}*/
-
-	/*string exp = "x <= 2";
-	auto cont = splitExp(exp);
-	for (auto i : cont)
-		cout << i << " ";
-	cout << endl;*/
-	string trace = "T->x = x + 1;{x > 6}->T";
-	verifier.getAllFunction(root, "");
-	auto trace_ = verifier.getTraceContrainst(trace);
-	cout << "TRACE: ";
-	for (auto i : trace_) {
-		cout << i.first << " ";
-	}
-	cout << endl;
-	vector<TreeRoot> listFunc;
-	vector<string> name;
-	verifier.ctx.set("timeout", 3000);
-	for (auto key : extract_keys(verifier.functionsMap)) {
-		verifier.currentContract = key;
-		cout << "Contract: " << key << endl;
-		for (auto i : extract_keys(verifier.functionsMap[key])) {
-			cout << "Function: " << i << endl;
-			TreeRoot tree(verifier.functionsMap[key][i], 1, verifier.functionsMap[key]);
-			listFunc.push_back(tree);
-			name.push_back(i);
-			cout << "Not Depth: " << tree.getDepth(false) << endl;
-			cout << "Depth:     " << tree.getDepth() << endl;
-			//verifier.checkTrace(trace_, *tree);
+	std::string path = "./resources/output";
+	fstream fout;
+	fout.open("reportcard.csv", ios::out | ios::app);
+	int start, end, i = -1;
+	//start = 1213;
+	start = 0;
+	end = 1;
+	for (const auto& entry : fs::directory_iterator(path)) {
+		i++;
+		if (i < start)
+			continue;
+		string filePath = entry.path().string();
+		string smartContract = filePath.substr(path.length() + 1, filePath.find('.', path.length()) - path.length() - 1);
+		cout << smartContract << " " << i << endl;
+		Json::Value root;
+		root = readJson(path + "/" + smartContract + ".sol_json.ast");
+		ifstream f("resources/" + smartContract + ".sol");
+		f.open("resources" + smartContract + ".sol");
+		string contents((std::istreambuf_iterator<char>(f)),
+			std::istreambuf_iterator<char>());
+		const char* ptn = contents.c_str();
+		string rawStr = toRawStr(contents);
+		pair<int, int> result;
+		try {
+			result = checkContract(rawStr, root);
 		}
+		catch (const std::exception& e) {
+			cout << "ERROR" << endl;
+			result = {3, 3};
+		}
+		catch (const std::string& ex) {
+			cout << "ERROR" << endl;
+			result = { 3, 3 };
+		}
+		catch (...) {
+			cout << "ERROR" << endl;
+			result = { 3, 3 };
+		}
+
+		fout << smartContract << "," << result.first << "," << result.second << endl;
+		if (i >= end)
+			break;
+		/*if (result.first)
+			cout << "Overflow" << endl;
+		if (result.second)
+			cout << "Underflow" << endl;*/
 	}
+	/*cout << name[num] << endl;
+	auto temp = listFunc[num];
 
-	int num = 5;
-	/*for (int i = 0; i < name.size(); ++i) {
-		cout << name[i] << endl;
-		auto temp = listFunc[i];
+	verifier.checkTrace(trace_, typeConstraint, temp);*/
 
-		verifier.checkTrace(trace_, temp);
-	}*/
-	cout << name[0] << endl;
-	auto temp = listFunc[0];
-
-	verifier.checkTrace(trace_, temp);
-
-
+	
 	// trace: T->a->T
 
+	/*string trace = "expr x;";
+	ANTLRInputStream input(trace);
+	SolidityLexer lexer(&input);
+	CommonTokenStream tokens(&lexer);
+	SolidityParser parser(&tokens);
+	SolidityParser::TypeDeclContext* tree = parser.typeDecl();
+	cout << tree << endl;
 
 
 	//model m = s.get_model();
@@ -145,6 +213,33 @@ int main() {
 	expr bv2 = c.bv_val(len, bool_str);
 	cout << bv2 << endl;*/
 
+
+	/*context c;
+	vector<pair<string, Type*>> listType;
+	func_decl_vector projs(c);
+	const char* name_[3] = { "yetNeeded", "ownerDone", "index" };
+	string name = "PendingState";
+	listType.push_back({ "yetNeeded", new UInt(256) });
+	listType.push_back({ "ownerDone", new UInt(256) });
+	listType.push_back({ "index", new UInt(256) });
+	int size = listType.size();
+	char* _names[10];
+	z3::sort sorts[10] = { c.int_sort(), c.int_sort(), c.int_sort(),
+		c.int_sort(), c.int_sort(), c.int_sort(), c.int_sort(), c.int_sort(), c.int_sort(), c.int_sort() };
+
+	int i = 0;
+	for (auto mem : listType) {
+		_names[i] = strdup(mem.first.c_str());
+		sorts[i++] = mem.second->getSort(c);
+	}
+
+	cout << size << endl;
+	func_decl structDecl = c.tuple_sort(name.c_str(), size, _names, sorts, projs);
+	for (auto func : projs)
+		cout << func << endl;
+		*/
+
+	
 
 	system("pause");
 	return 0;

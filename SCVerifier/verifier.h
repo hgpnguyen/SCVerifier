@@ -16,13 +16,16 @@
 #include "Visitor.h"
 #include "tree.h"
 #include "type.h"
+#include <chrono>
 
 
 using namespace std;
 using namespace z3;
 using namespace antlr4;
 
+#define TIMELIMIT 120;
 
+typedef std::chrono::system_clock Clock;
 class EVisitor;
 struct ExpInfo {
 	vector<string> codeActivates;
@@ -49,10 +52,10 @@ struct Verifier {
 
 	void checkSas(string exp);
 	vector<pair<string, string>> getTraceContrainst(string traces);
-	void checkTrace(vector<pair<string, string>> traces, TreeRoot& functionTree);
+	bool checkTrace(vector<pair<string, string>> traces, string typeCOnstraint, TreeRoot& functionTree);
 	bool checkCondofTrace(string traces_str, model m, expr_vector vars, string path);
 	expr_vector readTrace(string trace, solver& s);
-	void getAllFunction(Json::Value ast, string contractName);
+	void getAllFunction(Json::Value ast);
 	void testSolvePath(list<PathNode*> path);
 private:
 
@@ -76,7 +79,7 @@ private:
 	check_result solvePath(list<PathNode*> path, map<string, Json::Value> decodeSol, map<string, string> encodeSol);
 	list<PathNode*> convertToPath(string path, model m);
 	expr_vector convertFuncCall(string var);
-	bool mapTraceToCode(list<PathNode*> path, string traces, map<string, Json::Value>& decodeSol);
+	bool mapTraceToCode(list<PathNode*> path, string traces, map<string, string> typeConstranit, map<string, Json::Value>& decodeSol);
 	expr removeOldSol(model& m, expr_vector vars);
 
 

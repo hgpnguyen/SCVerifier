@@ -43,9 +43,11 @@ vector<string> infixToPostfix(string str_exp);
 expr_vector readTrace(string trace, context& ctx);
 vector<string> splitExp(string str_exp);
 
+void bv2int(pair<expr*, ValType*>& p);
 void int2Bv(pair<expr*, ValType*>& p, int size = NULL);
 void extend(pair<expr*, ValType*>& p, unsigned int i);
 void preCheck(pair<expr*, ValType*>& l, pair<expr*, ValType*>& r, string op);
+void misMatch(pair<expr*, ValType*>& result);
 
 Json::Value createAssert(Json::Value param);
 Json::Value createUnary(Json::Value param, string op);
@@ -55,12 +57,16 @@ void getAllFunction(Json::Value ast, map<string, Json::Value>& functionsMap);
 TreeRoot* convertFunction(Json::Value, int depth);
 
 ValType* getType(Json::Value exp);
-Type* getVarDeclType(Json::Value, solver& s);
+Type* getAllType(Json::Value exp);
+Type* getVarDeclType(Json::Value, solver& s, string contractName);
+map<string, string> getTypeConstraint(string typeConstraint);
 
-inline Type* eleType(Json::Value code, solver& s) { return getType(code); }
-inline Type* arrType(Json::Value code, solver& s) { return new Array(getType(code["baseType"])); }
-inline Type* mapType(Json::Value code, solver& s) { return new Map(getVarDeclType(code["keyType"], s), getVarDeclType(code["valueType"], s)); }
-
+inline Type* eleType(Json::Value code, solver& s, string contractName) { if (code["typeDescriptions"]["typeString"].asString() != "bytes") return getType(code); else return new Array(new Byte(8)); }
+inline Type* arrType(Json::Value code, solver& s, string contractName) { return new Array(getAllType(code["baseType"])); }
+inline Type* mapType(Json::Value code, solver& s, string contractName) { 
+	auto m = new Map(getVarDeclType(code["keyType"], s, contractName), getVarDeclType(code["valueType"], s, contractName));
+	return m; }
+Type* userDefType(Json::Value code, solver& s, string contractName);
 
 template<typename TK, typename TV>
 vector<TK> extract_keys(std::map<TK, TV> const& input_map) {
@@ -74,13 +80,14 @@ vector<TK> extract_keys(std::map<TK, TV> const& input_map) {
 
 typedef expr(*pfunc) (expr, expr);
 map<string, pfunc> getOpConvert();
+string getParamStr(Json::Value paramList);
 
 inline expr add(expr l, expr r) { return l + r; }
 inline expr minusUti(expr l, expr r) { return l - r; }
 inline expr mul(expr l, expr r) { return l * r; }
 inline expr div(expr l, expr r) { return l / r; }
 inline expr mod(expr l, expr r) { return l % r; }
-inline expr exp(expr l, expr r) { return l ^ r.get_numeral_int(); }
+inline expr exp(expr l, expr r) { return l ^ r; }
 inline expr neg(expr sub, expr) { return -sub; }
 inline expr lt(expr l, expr r) { return l < r; }
 inline expr le(expr l, expr r) { return l <= r; }

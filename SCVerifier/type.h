@@ -4,6 +4,8 @@
 
 #include <stdio.h>
 #include "c++/z3++.h"
+#include <list>
+#include <vector>
 
 using namespace std;
 using namespace z3;
@@ -67,6 +69,8 @@ public:
 			bin += hex_char_to_bin(_hex[i]);
 		return bin;
 	}
+
+	string getMaxUINT(int size);
 };
 
 class Int : public ValType {
@@ -78,6 +82,8 @@ public:
 	expr getVar(context& c, string varName) { return c.int_const(varName.c_str()); }
 	expr getVal(context& c, string value) { 
 		return value.substr(0, 2) == "0x" ? c.int_val((int64_t)stoull(value, 0, 16)) : c.int_val(value.c_str());; }
+	expr getMax(context& c);
+	expr getMin(context& c);
 };
 
 class UInt : public ValType {
@@ -88,6 +94,8 @@ public:
 	expr getVar(context& c, string varName) { return c.int_const(varName.c_str()); }
 	expr getVal(context& c, string value) { 
 		return value.substr(0, 2) == "0x" ? c.int_val((uint64_t)stoull(value, 0, 16)) : c.int_val(value.c_str()); }
+	expr getMax(context& c);
+	expr getMin(context& c) { return c.int_val(0); }
 };
 
 class Bool : public ValType {
@@ -129,7 +137,7 @@ public:
 class RefType : public Type {
 public:
 	virtual z3::sort getSort(context& c) = 0;
-	virtual expr getVar(context& c, string varName) = 0;
+	expr getVar(context& c, string varName) { return c.constant(c.str_symbol(varName.c_str()), getSort(c)); };
 };
 
 class Array : public RefType {
@@ -141,7 +149,6 @@ public:
 	}
 
 	z3::sort getSort(context& c) { return c.array_sort(c.int_sort(), array_type->getSort(c)); }
-	expr getVar(context& c, string varName) { return c.constant(c.str_symbol(varName.c_str()), getSort(c)); }
 
 };
 
@@ -156,7 +163,29 @@ public:
 	}
 
 	z3::sort getSort(context& c) { return c.array_sort(index_type->getSort(c), array_type->getSort(c)); }
-	expr getVar(context& c, string varName) { return c.constant(c.str_symbol(varName.c_str()), getSort(c)); }
+
+};
+
+class Struct : public RefType {
+	string name;
+	vector<pair<string, Type*>> listType;
+
+public:
+	Struct(string name, vector<pair<string, Type*>> & listType) {
+		this->listType = listType;
+		this->name = name;
+	}
+
+	z3::sort getSort(context& c) { func_decl_vector vec(c);  return reconstruct(c, vec).range(); };
+	expr getMem(context& c, string funcName, expr var);
+	expr getMem(context& c, int index, expr var) { func_decl_vector vec(c); reconstruct(c, vec); return vec[index](var); }
+	expr getNewStruct(context& c, string funcName, expr temp, expr var);
+	void getFuncVec(func_decl_vector& vec) { reconstruct(vec.ctx(), vec); }
+	func_decl getStruct(context& c) { func_decl_vector vec(c);  return reconstruct(c, vec); }
+	vector<pair<string, Type*>> getListType() { return listType; }
+private:
+	func_decl reconstruct(context& c, func_decl_vector& projs);
+
 };
 
 #endif

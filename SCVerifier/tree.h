@@ -134,6 +134,7 @@ private:
 
 	list<TreeNode*> functionCall(Json::Value ctx, int depth);
 	list<TreeNode*> functionDef(Json::Value ctx, int depth);
+	list<TreeNode*> parameterList(Json::Value ctx, int depth);
 
 	string encode(string code);
 	string encodeExt(string code, Json::Value ctx);

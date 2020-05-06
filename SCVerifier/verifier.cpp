@@ -52,11 +52,13 @@ void Verifier::checkSas(string exp) {
 
 }*/
 
-void Verifier::checkTrace(vector<pair<string, string>> traces, TreeRoot& functionTree) {
+bool Verifier::checkTrace(vector<pair<string, string>> traces, string typeConstaint, TreeRoot& functionTree) {
 	solver s(ctx);
 	expr_vector traces_expr(ctx);
+	ctx.set("timeout", 3000);
 
 	expr union_ = ctx.int_val(1);
+	map<string, string> typeConst = getTypeConstraint(typeConstaint);
 	map<string, Json::Value>* decodeSol = functionTree.getDecode();
 	for (auto key : UTILITY_H::extract_keys(*decodeSol)) {
 		expr re = to_re(ctx.string_val(key));
@@ -75,6 +77,8 @@ void Verifier::checkTrace(vector<pair<string, string>> traces, TreeRoot& functio
 		else if (t.first[0] == 'W') {
 			int num = count(t.second.begin(), t.second.end(), ';');
 			expr exp = makeStringFunction(&ctx, t.first);
+			if (!union_.is_re())					//Function with empty block
+				return false;
 			s.add(in_re(exp, union_.loop(num, num)));
 			traces_expr.push_back(exp);
 		}
@@ -82,9 +86,11 @@ void Verifier::checkTrace(vector<pair<string, string>> traces, TreeRoot& functio
 	
 	expr func = functionTree.getExpr(ctx, s);
 	s.add(in_re(concat(traces_expr), func));
+	//cout << functionTree.getDepth(true) << endl;
 	check_result result;
+	auto start = Clock::now();
+
 	while ((result = s.check()) == sat) {
-		std::cout << result << endl;
 		model m = s.get_model();
 		int index = 0;
 		list<PathNode*> path;
@@ -94,32 +100,34 @@ void Verifier::checkTrace(vector<pair<string, string>> traces, TreeRoot& functio
 				path.splice(path.end(), convertToPath(m.eval(traces_expr[index++]).get_string(), m));
 			else if (i.first[0] == 'W') {
 				auto temp = convertToPath(m.eval(traces_expr[index++]).get_string(), m);
-				checkTrToCode = mapTraceToCode(temp, i.second, *decodeSol);
+				checkTrToCode = mapTraceToCode(temp, i.second, typeConst, *decodeSol);
 				path.splice(path.end(), temp);
 			}
 			else path.push_back(new CondNode(i.second));
 		}
-		//PathNode::ctx = &ctx;
-
-		cout << "Model: " << m << endl;
-		cout << "Path: ";
-		for (auto i : path)
-			cout << i->DepthFS() << " ";
-		cout << endl;
-
-
+		/*if (checkTrToCode) {
+			cout << "Model: " << m << endl;
+			cout << "Path: ";
+			for (auto i : path)
+				cout << i->DepthFS() << " ";
+			cout << endl;
+		}
+		*/
 		if (!checkTrToCode || !solvePath(path, *decodeSol, functionTree.getEncode())) {
+			auto end = Clock::now();
+			long long timeLimit = 1000000 * TIMELIMIT;
+			if ((end - start).count() / 1000 > timeLimit)
+				return false;
 			s.add(removeOldSol(m, traces_expr));
 
 		}
 		else {
-			cout << "SAT" << endl;
-			cout << endl;
-			return;
+
+			return true;
 		}
 	}
-	cout << result << endl;
-	cout << endl;
+	//cout << endl;
+	return false;
 }
 
 expr_vector Verifier::getAllPath(expr exp) {
@@ -231,9 +239,13 @@ check_result Verifier::solvePath(list<PathNode*> path, map<string, Json::Value> 
 			if (j.is_bool())
 				s.add(j);
 	}
-	cout << s << endl;
 	auto result = s.check();
 	if (result != sat) cout << result << endl;
+	else {
+		cout << s << endl;
+		cout << "SAT" << endl;
+		cout << s.get_model() << endl;
+	}
 	return result;
 }
 
@@ -272,12 +284,13 @@ expr_vector Verifier::convertFuncCall(string var)
 	return expr_vector(ctx);
 }
 
-bool Verifier::mapTraceToCode(list<PathNode*> path, string traces, map<string, Json::Value>& decodeSol)
+bool Verifier::mapTraceToCode(list<PathNode*> path, string traces, map<string, string> typeConst, map<string, Json::Value>& decodeSol)
 {
 	vector<string> cont;
 	split(traces, cont, ';');
 	assert(path.size() == cont.size());
 	int index = 0;
+	MapVisitor visitor(CondNode::m, typeConst);
 	for (auto p : path) {
 		ANTLRInputStream input(cont[index++] + ';');
 		SolidityLexer lexer(&input);
@@ -285,7 +298,7 @@ bool Verifier::mapTraceToCode(list<PathNode*> path, string traces, map<string, J
 		SolidityParser parser(&tokens);
 		SolidityParser::StatementContext* tree = parser.statement();
 		Json::Value code = decodeSol[p->getValue()];
-		MapVisitor visitor(code, CondNode::m);
+		visitor.setJson(code);
 		bool result = visitor.visitStatement(tree).as<bool>();
 		if (!result)
 			return false;
@@ -301,6 +314,7 @@ expr Verifier::removeOldSol(model& m, expr_vector vars)
 	}
 	return mk_or(orExp);
 }
+
 
 
 vector<pair<string, string>> Verifier::getTraceContrainst(string traces)
@@ -333,40 +347,53 @@ vector<pair<string, string>> Verifier::getTraceContrainst(string traces)
 }
 
 
-void Verifier::getAllFunction(Json::Value ast, string contractName)
+void Verifier::getAllFunction(Json::Value ast)
 {
 	if (ast.isObject()) {
 		if (!ast.isMember("nodeType"))
 			return;
-		else if (ast["nodeType"] == "FunctionDefinition" && !ast["body"].isNull()) {
-			string name =  ast["name"].asString();
-			if (name == "")
-				name += ast["kind"].asString();
-			functionsMap[contractName][name] = ast;
-			return;
-		}
 		if (ast["nodeType"] == "ContractDefinition") {
-			getAllFunction(ast["nodes"], ast["name"].asString());
-			return;
-		}
-		if (ast["nodeType"] == "VariableDeclaration") {
+			string contractName = ast["name"].asString();
 			solver s(ctx);
-			Type* type = getVarDeclType(ast["typeName"], s);
-			if (type != NULL) {
-				cout << ast["name"].asString() << " " << type << endl;
-				EVisitor::addGlobalVar(contractName +  "." + ast["name"].asString(), { type, 0 });
-			}
+			for(auto node: ast["nodes"])
+				if (node["nodeType"] == "FunctionDefinition" && !node["body"].isNull()) {
+					string name = node["name"].asString();
+					if (name == "")
+						name += node["kind"].asString();
+					name += "(" + getParamStr(node["parameters"]["parameters"]) + ")";
+					functionsMap[contractName][name] = node;
+				}
+				else if (node["nodeType"] == "StructDefinition") {
+					string name = node["name"].asString();
+					vector<pair<string, Type*>> vec;
+					for (auto mem : node["members"]) {
+						Type* type = getVarDeclType(mem["typeName"], s, contractName);
+						vec.push_back({ mem["name"].asString(), type });
+					}
+
+					Struct* structType = new Struct(name, vec);
+					EVisitor::addGlobalVar(contractName + "." + name + ".Struct", { structType, 0 });
+				}
+
+			for (auto node : ast["nodes"])
+				if (node["nodeType"] == "VariableDeclaration") {
+					Type* type = getVarDeclType(node["typeName"], s, contractName);
+					if (type != NULL) {
+						EVisitor::addGlobalVar(node["id"].asString(), { type, 0 });
+					}
+				}
+
 			return;
 		}
 		for (auto i : ast.getMemberNames()) {
 			if (ast[i].isArray() || ast[i].isObject())
-				getAllFunction(ast[i], contractName);
+				getAllFunction(ast[i]);
 		}
 	}
 	else if (ast.isArray()) {
 		for (auto i : ast)
 			if (i.isArray() || i.isObject())
-				getAllFunction(i, contractName);
+				getAllFunction(i);
 	}
 }
 
@@ -617,7 +644,7 @@ expr Verifier::convertToExp(string str, map < string, pair<ValType*, int>> vars)
 		else if (str[0] >= '0' && str[0] <= '9')
 			type = new Int(256);
 		else {
-			throw "ID not found";
+			throw std::exception("ID not found");
 
 		}
 		return type->getVal(ctx, str);

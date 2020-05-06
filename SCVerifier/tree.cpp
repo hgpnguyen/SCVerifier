@@ -13,7 +13,6 @@
 expr TreeRoot::getExpr(context& c, solver& s)
 {
 	expr_vector vec(c);
-	cout << childrens.size() << endl;
 	for (auto child : childrens) {
 		vec.push_back(child->getExpr(c, s));
 	}
@@ -42,6 +41,7 @@ list<TreeNode*> TreeRoot::visit(Json::Value ctx, int depth)
 	switchCase["Assignment"] = &TreeRoot::assignment;
 	switchCase["BinaryOperation"] = &TreeRoot::binaryOp;
 	switchCase["UnaryOperation"] = &TreeRoot::unaryOp;
+	switchCase["ParameterList"] = &TreeRoot::parameterList;
 	string nodeType = ctx["nodeType"].asString();
 	auto func = switchCase.find(nodeType) != switchCase.end() ? switchCase[nodeType] : &TreeRoot::otherStmt;
 	auto result = (this->*func)(ctx, depth);
@@ -207,7 +207,7 @@ list<TreeNode*> TreeRoot::unaryOp(Json::Value ctx, int depth)
 
 list<TreeNode*> TreeRoot::otherStmt(Json::Value ctx, int depth)
 {
-	if (strstr(ctx["nodeType"].asCString(), "Statement") == NULL) {
+	if (ctx["nodeType"].asString().find("Statement") == string::npos) {
 		return list<TreeNode*>();
 	}
 	list<TreeNode*> result;
@@ -225,7 +225,7 @@ list<TreeNode*> TreeRoot::functionCall(Json::Value ctx, int depth)
 	if (ctx["expression"]["nodeType"] == "Identifier" && ctx["expression"]["name"] == "assert")
 		return visit(ctx["arguments"][0], depth);
 	list<TreeNode*> result;
-	string funcName = ctx["expression"]["name"].isNull() ? getCode(ctx["expression"], sourceCode) : ctx["expression"]["name"].asString(); //type Conversion function dont have name
+	string funcName = ctx["expression"]["name"].isNull() ? getCode(ctx["expression"], sourceCode) : ctx["expression"]["name"].asString() + "(" + getParamStr(ctx["arguments"]) + ")"; //type Conversion function dont have name
 	map<string, Json::Value>::iterator iter;
 	if (depth == 0 || (iter = functionsMap.find(funcName)) == functionsMap.end()) {
 		return list<TreeNode*>();
@@ -239,7 +239,24 @@ list<TreeNode*> TreeRoot::functionCall(Json::Value ctx, int depth)
 
 list<TreeNode*> TreeRoot::functionDef(Json::Value ctx, int depth)
 {
-	return visit(ctx["body"], depth);
+	list<TreeNode*> result;
+	auto para = visit(ctx["parameters"], depth);
+	result.splice(result.end(), visit(ctx["parameters"], depth));
+	result.splice(result.end(), visit(ctx["returnParameters"], depth));
+	result.splice(result.end(), visit(ctx["body"], depth));
+	return result;
+}
+
+list<TreeNode*> TreeRoot::parameterList(Json::Value ctx, int depth)
+{
+	list<TreeNode*> result;
+	string code = getCode(ctx, sourceCode);
+	code = code;
+	string enStr = encode(code);
+	result.push_back(new LeafNode(enStr));
+	if (decodeSol.find(enStr) == decodeSol.end())
+		decodeSol[enStr] = ctx;
+	return result;
 }
 
 string TreeRoot::encode(string code)
@@ -312,7 +329,7 @@ expr LoopNode::getExpr(context& c, solver& s)
 	expr_vector vec(c);
 	for (auto child : childrens)
 		vec.push_back(child->getExpr(c, s));
-	return concat(vec).loop(0, 5);
+	return concat(vec).loop(0, 3);
 }
 
 string SubNode::DepthFS(bool isDepth)
@@ -353,7 +370,6 @@ string VarNode::DepthFS(bool isDepth)
 
 expr VarNode::getExpr(context& c, solver& s)
 {	
-	
 	expr var = makeStringFunction(&c, value);
 	expr_vector vec(c);
 
@@ -384,10 +400,13 @@ expr_vector FuncNode::toZ3(EVisitor& visitor, solver& s)
 			result.push_back(i);
 	}
 	if (type != NULL) {
+		if (result.size() == 0)
+			return result;
 		expr funcVar = type->getVar(s.ctx(), value);
 		expr return_ = funcVar == result[result.size() - 1];
 		result.pop_back();
 		result.push_back(return_);
+		
 	}
 
 	return result;

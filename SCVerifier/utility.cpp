@@ -5,7 +5,7 @@
 
 
 Json::Value readJson(string filename) {
-	ifstream file("resources/" + filename);
+	ifstream file(filename);
 	Json::Value root;
 	Json::Reader reader;
 	if (!reader.parse(file, root)) {
@@ -342,6 +342,17 @@ vector<string> splitExp(string str_exp) { // split exp string into mutiple compo
 	return cont;
 }
 
+void bv2int(pair<expr*, ValType*>& p)
+{
+	context& c = p.first->ctx();
+	if (typeid(*p.second) == typeid(UInt)) {
+		*p.first = to_expr(c, Z3_mk_bv2int(c, *p.first, false));
+	}
+	else if (typeid(*p.second) == typeid(Int)) {
+		*p.first = to_expr(c, Z3_mk_bv2int(c, *p.first, true));
+	}
+}
+
 void int2Bv(pair<expr*, ValType*>& p, int size) {
 	*p.first = to_expr(p.first->ctx(), Z3_mk_int2bv(p.first->ctx(), size == NULL ? p.second->getSize() : size, *p.first));
 	p.second = &Byte(p.second->getSize());
@@ -353,8 +364,8 @@ void extend(pair<expr*, ValType*>& p, unsigned int i) {
 }
 
 void preCheck(pair<expr*, ValType*>& l, pair<expr*, ValType*>& r, string op) {
-	string listOP[3] = { "&", "|", "^" };
-	if (listOP->find(op) != string::npos && l.first->is_int() && r.first->is_int()) {
+	vector<string> vec = { "&", "|", "^", "**" };
+	if (find(vec.begin(), vec.end(), op) != vec.end() && l.first->is_int() && r.first->is_int()) {
 		int2Bv(l);
 		int2Bv(r);
 	}
@@ -367,6 +378,16 @@ void preCheck(pair<expr*, ValType*>& l, pair<expr*, ValType*>& r, string op) {
 		if (l.second->getSize() > r.second->getSize())
 			extend(r, l.second->getSize() - r.second->getSize());
 		else extend(l, r.second->getSize() - l.second->getSize());
+}
+
+void misMatch(pair<expr*, ValType*>& result)
+{
+	if (result.first->is_bv() && typeid(*result.second) != typeid(Byte)) {
+		bv2int(result);
+	}
+	else if (result.first->is_int() && typeid(*result.second) == typeid(Byte)) {
+		int2Bv(result);
+	}
 }
 
 Json::Value createAssert(Json::Value param)
@@ -494,22 +515,77 @@ ValType* getType(Json::Value exp) {
 			return new String();
 	if (type.find("string") != string::npos)
 		return  new String();
-	if (type.find("tuple()") != string::npos)
+	/*if (type.find("tuple()") != string::npos)
 		return NULL;
-	throw "Other type: " + type;
+	if (type.find("msg") != string::npos)
+		return NULL;
+	if (type.find("block") != string::npos)
+		return NULL;*/
+	return NULL;
+	//throw "Other type: " + type;
 }
 
-Type* getVarDeclType(Json::Value code, solver& s)
+Type* getAllType(Json::Value exp)
 {
-	typedef Type* (*pfunc)(Json::Value, solver& s);
+	string typeName = exp["typeDescriptions"]["typeString"].asString();
+	if (typeName.find("struct") != string::npos) {
+		auto start = typeName.find(" ");
+		auto end = typeName.find(" ", start + 1);
+		string structName = typeName.substr(start + 1, end - start - 1) + ".Struct";
+		auto type = EVisitor::findGlobalVar(structName);
+		if (type.first == NULL)
+			throw std::exception("Can't find Struc: ");
+		return type.first;
+	}
+	else if (typeName.find("[]") != string::npos)
+		return new Array(getType(exp));
+	else return getType(exp);
+
+	return nullptr;
+}
+
+Type* getVarDeclType(Json::Value code, solver& s, string contractName)
+{
+	typedef Type* (*pfunc)(Json::Value, solver& s, string contractName);
 	map<string, pfunc> switchCase;
 	switchCase["ElementaryTypeName"] = eleType;
 	switchCase["ArrayTypeName"] = arrType;
 	switchCase["Mapping"] = mapType;
+	switchCase["UserDefinedTypeName"] = userDefType;
 	if (switchCase.find(code["nodeType"].asString()) == switchCase.end())
 		return NULL; //User Define Type;
 	auto func = switchCase[code["nodeType"].asString()];
-	return (*func)(code, s);
+	return (*func)(code, s, contractName);
+}
+
+map<string, string> getTypeConstraint(string typeConstraint)
+{
+	vector<string> cont;
+	split(typeConstraint, cont, ';');
+	Visitor visitor;
+	for (auto i : cont) {
+		ANTLRInputStream input(i + ';');
+		SolidityLexer lexer(&input);
+		CommonTokenStream tokens(&lexer);
+		SolidityParser parser(&tokens);
+		SolidityParser::TypeDeclContext* tree = parser.typeDecl();
+		visitor.visitTypeDecl(tree);
+	}
+
+
+	return visitor.getType();
+}
+
+Type* userDefType(Json::Value code, solver& s, string contractName)
+{
+	string name = contractName + "." + code["name"].asString() + ".Struct";
+	if (code["typeDescriptions"]["typeString"].asString().substr(0, 8) == "contract")
+		return NULL;
+	auto userType = EVisitor::findGlobalVar(name);
+	if (userType.first == NULL) 
+		throw std::exception("Not found Struct ");
+
+	return userType.first;
 }
 
 map<string, pfunc> getOpConvert()
@@ -544,4 +620,15 @@ map<string, pfunc> getOpConvert()
 	opConvert["u--"] = uminus2;
 	opConvert["udelete"] = udelete;
 	return opConvert;
+}
+
+string getParamStr(Json::Value paramList)
+{
+	string result = "";
+	for (auto param : paramList) {
+		result += param["typeDescriptions"]["typeString"].asString() + ",";
+	}
+	if (!result.empty())
+		result.pop_back();
+	return result;
 }

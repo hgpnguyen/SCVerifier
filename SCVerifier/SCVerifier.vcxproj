@@ -22,7 +22,7 @@
     <VCProjectVersion>16.0</VCProjectVersion>
     <ProjectGuid>{04B27E48-8DAA-4557-9FE5-A950BC4199F5}</ProjectGuid>
     <RootNamespace>SCVerifier</RootNamespace>
-    <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -41,7 +41,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
@@ -90,12 +90,16 @@
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\Users\phuc\Source\Repos\SCVerifier\SCVerifier\z3-master\src\api;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\Nghe\source\repos\hgpnguyen\library\z3\src\api;C:\Users\Nghe\source\repos\hgpnguyen\library\antlr4-cpp\antlr4-runtime;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalOptions>/D _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS %(AdditionalOptions)</AdditionalOptions>
+      <ExceptionHandling>Async</ExceptionHandling>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
-      <AdditionalLibraryDirectories>C:\Users\phuc\Source\Repos\SCVerifier\SCVerifier\z3-master\build;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>libz3.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Users\Nghe\source\repos\hgpnguyen\library\z3\build;C:\Users\Nghe\source\repos\hgpnguyen\library\antlr4-cpp\lib\vs-2015\x64\Release DLL;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>libz3.lib;antlr4-runtime.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -129,14 +133,27 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\library\antlr4-cpp\antlr4-runtime\SolidityBaseVisitor.cpp" />
+    <ClCompile Include="..\..\library\antlr4-cpp\antlr4-runtime\SolidityLexer.cpp" />
+    <ClCompile Include="..\..\library\antlr4-cpp\antlr4-runtime\SolidityParser.cpp" />
+    <ClCompile Include="..\..\library\antlr4-cpp\antlr4-runtime\SolidityVisitor.cpp" />
+    <ClCompile Include="BigInt.cpp" />
     <ClCompile Include="jsoncpp.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="tree.cpp" />
+    <ClCompile Include="type.cpp" />
     <ClCompile Include="utility.cpp" />
     <ClCompile Include="verifier.cpp" />
+    <ClCompile Include="Visitor.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="BigInt.h" />
+    <ClInclude Include="stdc++.h" />
+    <ClInclude Include="tree.h" />
+    <ClInclude Include="type.h" />
     <ClInclude Include="utility.h" />
     <ClInclude Include="verifier.h" />
+    <ClInclude Include="Visitor.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
