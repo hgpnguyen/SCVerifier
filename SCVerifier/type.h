@@ -6,6 +6,7 @@
 #include "c++/z3++.h"
 #include <list>
 #include <vector>
+#include <bitset>  
 
 using namespace std;
 using namespace z3;
@@ -70,7 +71,16 @@ public:
 		return bin;
 	}
 
-	string getMaxUINT(int size);
+	bool* str2bv(string str) {
+		bool* bv = new bool[str.size() * 8];
+		for (size_t i = 0; i < str.size(); ++i)
+		{
+			string temp = bitset<8>(str.c_str()[i]).to_string();
+			for (size_t j = 0; j < temp.size(); ++j)
+				bv[8 * i + j] = temp[j] == '1';
+		}
+		return bv;
+	}
 };
 
 class Int : public ValType {
@@ -80,8 +90,15 @@ public:
 
 	z3::sort getSort(context& c) { return  c.int_sort(); }
 	expr getVar(context& c, string varName) { return c.int_const(varName.c_str()); }
-	expr getVal(context& c, string value) { 
-		return value.substr(0, 2) == "0x" ? c.int_val((int64_t)stoull(value, 0, 16)) : c.int_val(value.c_str());; }
+	expr getVal(context& c, string value) {
+		if (value.substr(0, 2) == "0x") {
+			int length = value.length() - 2;
+			if (value.length() > 16)
+				return c.int_val(c.bv_val(length * 4, hex_str_to_bool_arr(length * 4, value)).get_decimal_string(0).c_str());
+			else return c.int_val((int64_t)stoull(value, 0, 16));
+		}
+		else return c.int_val(value.c_str());
+	}
 	expr getMax(context& c);
 	expr getMin(context& c);
 };
@@ -93,7 +110,14 @@ public:
 	z3::sort getSort(context& c) { return  c.int_sort(); }
 	expr getVar(context& c, string varName) { return c.int_const(varName.c_str()); }
 	expr getVal(context& c, string value) { 
-		return value.substr(0, 2) == "0x" ? c.int_val((uint64_t)stoull(value, 0, 16)) : c.int_val(value.c_str()); }
+		if (value.substr(0, 2) == "0x") {
+			int length = value.length() - 2;
+			if (value.length() > 16)
+				return c.int_val(c.bv_val(length * 4, hex_str_to_bool_arr(length * 4, value)).get_decimal_string(0).c_str());
+			else return c.int_val((int64_t)stoull(value, 0, 16));
+		}
+		else return c.int_val(value.c_str());
+	}
 	expr getMax(context& c);
 	expr getMin(context& c) { return c.int_val(0); }
 };
@@ -125,14 +149,16 @@ public:
 	expr getVal(context& c, string value) { return c.bv_val(size, hex_str_to_bool_arr(256, value)); }
 };
 
-class String : public ValType {
+/*class String : public ValType {
 public:
 	String() : ValType(256) {}
 
 	z3::sort getSort(context& c) { return  c.string_sort(); }
-	expr getVar(context& c, string varName) { return c.constant(c.str_symbol(varName.c_str()), c.string_sort()); }
-	expr getVal(context& c, string value) { return c.string_val(value); }
-};
+	expr getVar(context& c, string varName) { 	return c.constant(c.str_symbol(varName.c_str()), c.string_sort()); }
+	expr getVal(context& c, string value) { 
+
+		return c.bv_val(256, str2bv(value)); }
+};*/
 
 class RefType : public Type {
 public:
@@ -186,6 +212,23 @@ public:
 private:
 	func_decl reconstruct(context& c, func_decl_vector& projs);
 
+};
+
+class Enum : public ValType {
+	string name;
+	vector<string> listMem;
+
+public:
+	Enum(string name, vector<string>& listType) : ValType(256) {
+		this->listMem = listType;
+		this->name = name;
+	}
+
+	z3::sort getSort(context& c);
+	expr getVal(context& c, string varName);
+	expr getVar(context& c, string varName) { return c.constant(c.str_symbol(varName.c_str()), getSort(c)); };
+private:
+	z3::sort reconstruct(context& c, func_decl_vector& enum_consts);
 };
 
 #endif

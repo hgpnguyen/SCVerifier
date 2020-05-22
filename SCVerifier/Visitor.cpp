@@ -79,11 +79,15 @@ antlrcpp::Any CalVisitor::visitExpression(SolidityParser::ExpressionContext* ctx
 		expr left = ctx->expression()[0]->accept(this);
 		expr right = ctx->expression()[1]->accept(this);
 		string op = ctx->children[1]->getText();
+		if (left.to_string() == "null" || right.to_string() == "null")
+			return s->ctx().bool_val(false);
 		return opConvert[op](left, right);
 	}
 	else if (ctx->expression().size() == 1 && ctx->children[0]->accept(this).is<string>()) { // Unary Op
 		expr subExp = ctx->expression()[0]->accept(this);
 		string op = ctx->children[0]->getText();
+		if(subExp.to_string() == "null")
+			return s->ctx().bool_val(false);
 		return opConvert["u" + op](subExp, s->ctx().int_val(0));
 	}
 	else if (ctx->primaryExpression())
@@ -104,9 +108,8 @@ antlrcpp::Any CalVisitor::visitIdentifier(SolidityParser::IdentifierContext* ctx
 	assert(traceToCode.find(ctx->getText()) != traceToCode.end());
 	expr var = visitor->visit(traceToCode[ctx->getText()], *s);
 	type = getType(traceToCode[ctx->getText()]);
-	if (var.to_string().substr(0, 4) != "temp")
-		return var;
-	else throw std::exception("ID not found");
+	string varName = var.to_string();
+	return var;
 }
 
 antlrcpp::Any CalVisitor::visitTuppleExpression(SolidityParser::TupleExpressionContext* ctx) {
@@ -128,6 +131,8 @@ antlrcpp::Any CalVisitor::visitTerminal(antlr4::tree::TerminalNode* ctx) {
 	case SolidityLexer::HexNumber:
 		return c->int_val(stoi(text, 0, 16));
 	case SolidityLexer::MaxKeyword:
+		if (type == NULL)
+			return expr(*c);
 		if (typeid(*type) == typeid(UInt))
 			return dynamic_cast<UInt*>(type)->getMax(*c);
 		else if (typeid(*type) == typeid(Int))
@@ -135,7 +140,8 @@ antlrcpp::Any CalVisitor::visitTerminal(antlr4::tree::TerminalNode* ctx) {
 		else throw std::exception("Wrong type for Max");
 
 	case SolidityLexer::MinKeyword:
-		
+		if (type == NULL)
+			return expr(*c);
 		if (typeid(*type) == typeid(UInt)) 
 			return dynamic_cast<UInt*>(type)->getMin(*c);
 		else if (typeid(*type) == typeid(Int))
@@ -194,8 +200,11 @@ expr EVisitor::varDeclStmt(Json::Value code, solver& s, bool isLeft)
 	if (!code["initialValue"].isNull())
 		if (code["initialValue"]["nodeType"] == "TupleExpression")
 			init = tuppleExp(code["initialValue"], s);
-		else if (code["initialValue"]["typeDescriptions"]["typeString"].asString().substr(0, 5) != "tuple")
-			init.push_back(visit(code["initialValue"], s, isLeft));
+		else if (code["initialValue"]["typeDescriptions"]["typeString"].asString().substr(0, 5) != "tuple") {
+			auto temp = visit(code["initialValue"], s, isLeft);
+			if(temp.to_string() != "null")
+				init.push_back(temp);
+		}
 	if (init.empty())
 		return expr(s.ctx());
 	else {
@@ -204,9 +213,13 @@ expr EVisitor::varDeclStmt(Json::Value code, solver& s, bool isLeft)
 				try {
 					result.push_back(decls[i] == init[i]);
 				}
-				catch (z3::exception e){
+				catch (z3::exception e) {
 
 				}
+				catch (std::exception e){
+
+				}
+				catch(...){}
 			}
 		}
 		else {
@@ -225,33 +238,53 @@ expr EVisitor::varDeclStmt(Json::Value code, solver& s, bool isLeft)
 
 expr EVisitor::returnStmt(Json::Value code, solver& s, bool isLeft)
 {
-	return visit(code["expression"], s, isLeft);;
+	expr result = visit(code["expression"], s, isLeft);
+	if (result.to_string() == "null" && !code["expression"].isNull()) {
+		string temp = "temp" + to_string(tempIndex++);
+		Type* type = getAllType(code["expression"]);
+		if(type != NULL)
+			result = type->getVar(s.ctx(), temp);
+	}
+	return result;
 }
 
 expr EVisitor::assignment(Json::Value code, solver& s, bool isLeft)
 {
+	if (code["leftHandSide"]["nodeType"].asString() == "TupleExpression")
+		return assignTuple(code, s, isLeft);
 	string op = code["operator"].asString();
-	expr right = visit(code["rightHandSide"], s, isLeft);
-	ValType* type = getType(code);
-	pair<expr*, ValType*> para = { &right, type };
-	if (type != NULL && (typeid(*type) == typeid(UInt) || typeid(*type) == typeid(Int)) && right.is_bv())
-		bv2int(para);
-	else if (type != NULL && typeid(*type) != typeid(UInt) && typeid(*type) != typeid(Int) && right.is_int())
-		int2Bv(para);
-	expr result(s.ctx());
-	if (op == "=") {
-		expr left = visit(code["leftHandSide"], s, true);
-		if (left.to_string() == "null" || right.to_string() == "null")
-			throw std::exception("Left or Right is NULL");
-		result = left == right;
-	}
+	expr right(s.ctx());
+	if (op == "=")
+		right = visit(code["rightHandSide"], s, isLeft);
 	else {
-		expr leftOrig = visit(code["leftHandSide"], s, false);
-		expr left = visit(code["leftHandSide"], s, true);
-		if (left.to_string() == "null" || right.to_string() == "null")
-			throw std::exception("Left or Right is NULL");
-		result = op == "+=" ? left == leftOrig + right : left == leftOrig - right;
+		string newOp = op.substr(0, op.length() - 1);
+		auto binary = createBinary(code["leftHandSide"], code["rightHandSide"], code["typeDescriptions"], newOp);
+		right = binaryOp(binary, s);
 	}
+	ValType* type = getType(code);
+	if (type == NULL)
+		return expr(s.ctx());
+	pair<expr*, ValType*> para = { &right, type };
+
+	if (right.to_string() == "null") {
+		string varName = "temp" + to_string(tempIndex++);
+		right = type->getVar(s.ctx(), varName);
+		initCondVar(right, s, type);
+		init.insert(varName);
+	}
+	if ((typeid(*type) == typeid(UInt) || typeid(*type) == typeid(Int)) && right.is_bv())
+		bv2int(para);
+	else if (typeid(*type) != typeid(UInt) && typeid(*type) != typeid(Int) && right.is_int())
+		int2Bv(para);
+	/*else if (typeid(*type) == typeid(Byte) && right.is_string_value()) {
+		string lit = right.get_string();
+		right = s.ctx().bv_val(type->getSize(), str2bv(lit));
+	}*/
+	expr left = visit(code["leftHandSide"], s, true);
+	if (left.to_string() == "null")
+		throw std::exception("Left or Right is NULL");
+	expr result = left == right;
+
 	return result;
 }
 
@@ -262,6 +295,8 @@ expr EVisitor::binaryOp(Json::Value code, solver& s, bool isLeft)
 	ValType* typeRight = getType(code["rightExpression"]);
 	ValType* type = getType(code);
 	string expOP = code["operator"].asString();
+	if (typeLeft == NULL || typeRight == NULL) //assgin contract situation
+		return expr(s.ctx());
 	if (typeid(*typeRight) == typeid(Byte) && (expOP == "<" || expOP == "<=" || expOP == ">" || expOP == ">=")) 
 		expOP = "u" + expOP;
 
@@ -271,8 +306,6 @@ expr EVisitor::binaryOp(Json::Value code, solver& s, bool isLeft)
 
 	pair<expr*, ValType*> pairL = { &left, typeLeft };
 	pair < expr*, ValType*> pairR = { &right, typeRight };
-
-	
 	preCheck(pairL, pairR, expOP);
 	expr result = op[expOP](left, right);
 	pair<expr*, ValType*> re = { &result, type };
@@ -284,11 +317,20 @@ expr EVisitor::unaryOp(Json::Value code, solver& s, bool isLeft)
 {
 	auto op = getOpConvert();
 	expr sub = visit(code["subExpression"], s, isLeft);
+	expr result(s.ctx());
+	ValType* type = getType(code["subExpression"]);
 	string expOP = code["operator"].asString();
 	if (op.find("u" + expOP) == op.end())
 		throw std::exception("New Unary OP: ");
-	expr result = op["u" + expOP](sub, expr(s.ctx()));
-
+	if (expOP == "~" && sub.is_int()) {
+		pair<expr*, ValType*> temp = { &sub, type };
+		int2Bv(temp);
+		result = op["u" + expOP](sub, expr(s.ctx()));
+		pair<expr*, ValType*> temp2 = { &result, type };
+		bv2int(temp2);
+		//cout << result << endl;
+	}
+	else result = op["u" + expOP](sub, expr(s.ctx()));
 	if (expOP == "++" || expOP == "--") {
 		expr left = visit(code["subExpression"], s, true);
 		s.add(left == result);
@@ -342,8 +384,17 @@ expr EVisitor::indexAccess(Json::Value code, solver& s, bool isLeft)
 {
 	expr baseExpr = visit(code["baseExpression"], s, false);
 	expr index = visit(code["indexExpression"], s, false);
-	if (index.to_string() == "null")
+	if (index.to_string() == "null" && code["indexExpression"]["typeDescriptions"]["typeString"].asString().substr(0, 8) == "contract") {
+		//Contract in place of address
+		string in = getCode(code["indexExpression"]);
+		Address address;
+		index = address.getVar(s.ctx(), in);
+	}
+	else if (index.to_string() == "null") {
 		throw std::exception("Index is null");
+	}
+	if (baseExpr.get_sort().array_domain().is_bv() && index.get_sort().is_int())
+		index = int2bv(baseExpr.get_sort().array_domain().bv_size(), index);
 	if (isLeft) {
 		string t = "temp" + to_string(tempIndex++);
 		expr temp = s.ctx().constant(s.ctx().str_symbol(t.c_str()), baseExpr.get_sort().array_range());
@@ -359,7 +410,19 @@ expr EVisitor::indexAccess(Json::Value code, solver& s, bool isLeft)
 expr EVisitor::literal(Json::Value code, solver& s, bool isLeft)
 {
 	ValType* type = getType(code);
-	string value = typeid(*type) == typeid(Byte) ? code["hexValue"].asString() : code["value"].asString();
+	string value;
+	if (typeid(*type) == typeid(Byte))
+		value = code["hexValue"].asString();
+	else if (code["subdenomination"].isNull()) {
+		value = code["value"].asString();
+	}
+	else { // unit like ether, ..
+		vector<string> vec;
+		split(code["typeDescriptions"]["typeString"].asString(), vec, " ");
+		value = vec[1];
+	}
+	if (code["kind"].asString() == "string")
+		return s.ctx().bv_val(256, str2bv(value));
 	expr result = type->getVal(s.ctx(), value);
 	return result;
 }
@@ -374,11 +437,17 @@ expr EVisitor::functionCall(Json::Value code, solver& s, bool isLeft)
 			throw std::exception("Some thing worng or cant find Struct");
 		Struct* strucT = dynamic_cast<Struct*>(type);
 		expr_vector vec(s.ctx());
-		for (auto arg : code["arguments"])
-			vec.push_back(visit(arg, s, false));
-		return strucT->getStruct(s.ctx())(vec);
+		map<string, Json::Value> m;
+		for (int i = 0; i < code["arguments"].size(); ++i) {
+			m[code["names"][i].asString()] = code["arguments"][i];
+		}
+		for (auto k : strucT->getListType())
+			vec.push_back(visit(m[k.first], s, isLeft));
+
+		func_decl structDecl = strucT->getStruct(s.ctx());
+		return structDecl(vec);
 	}
-	string name = getCode(code, sourceCode);
+	string name = getCode(code);
 	string varName = encode(name);
 	Type* type = getAllType(code);
 	expr result(s.ctx());
@@ -398,11 +467,15 @@ expr EVisitor::varDecl(Json::Value code, solver& s, bool isLeft)
 {
 	string name = prefix + code["name"].asString();
 	Type* type;
+	//cout << code << endl;
 	if (!code["typeName"].isNull())
-		type = getVarDeclType(code["typeName"], s, currentContract);
-	else type = getAllType(code);
-	if (type == NULL)
-		return expr(s.ctx()); //User Define Type
+		type = getVarDeclType(code["typeName"], s);
+	else {
+		type = getAllType(code);
+	}
+	if (type == NULL) {
+		return expr(s.ctx()); //contract Type
+	}
 	vars[code["id"].asString()] = { type, 0 };
 	expr newVar = type->getVar(s.ctx(), name + '0');
 	initCondVar(newVar, s, type);
@@ -412,15 +485,18 @@ expr EVisitor::varDecl(Json::Value code, solver& s, bool isLeft)
 
 expr EVisitor::memberAccess2(Json::Value code, solver& s, bool isLeft)
 {
-	string varName = getCode(code, sourceCode);
+	string varName = getCode(code);
 	ValType* type = getType(code);
-	auto var = Globalvars.find(currentContract + varName);
+	if (type == NULL)
+		return expr(s.ctx());
+	auto var = vars.find(prefix + varName);
 	int num;
-	if (var == Globalvars.end()) {
-		Globalvars[currentContract + varName] = { type, 0 };
+	if (var == vars.end()) {
+		vars[prefix + varName] = { type, 0 };
 		num = 0;
 	}
 	else num = isLeft ? ++var->second.second : var->second.second;
+	
 	string newName = varName + to_string(num);
 	expr var_ = type->getVar(s.ctx(), newName);
 	if (init.find(varName) == init.end()) {
@@ -431,8 +507,61 @@ expr EVisitor::memberAccess2(Json::Value code, solver& s, bool isLeft)
 	return var_;
 }
 
+expr EVisitor::enumAccess(Json::Value code, solver& s, bool isLeft)
+{
+	vector<string> cont;
+	split(code["typeDescriptions"]["typeString"].asString(), cont, " ");
+	string enumName = cont[1];
+	auto type = EVisitor::findGlobalVar(enumName + ".Enum");
+	if (type.first == NULL)
+		return memberAccess2(code, s, isLeft);
+	Enum* _enum = dynamic_cast<Enum*>(type.first);
+	string memName = code["memberName"].asString();
+	expr result = _enum->getVal(s.ctx(), memName);
+	if(result.to_string() == "null")
+		return memberAccess2(code, s, isLeft);
+	return result;
+}
+
+expr EVisitor::assignTuple(Json::Value code, solver& s, bool isLeft)
+{
+	Json::Value left = code["leftHandSide"];
+	Json::Value right = code["rightHandSide"];
+	expr_vector result(s.ctx());
+	if (right["nodeType"].asString() == "TupleExpression") {
+		for (int i = 0; i < left["components"].size(); ++i) {
+			if (left["components"][i].isNull())
+				continue;
+			auto assign = createAssign(left["components"][i], right["components"][i]);
+			expr temp = assignment(assign, s, isLeft);
+			result.push_back(temp);
+		}
+		return mk_and(result);
+	}
+	else {
+		for (auto i : left["components"]) {
+			if (i.isNull())
+				continue;
+			ValType* type = getType(i);
+			expr com = visit(i, s, true);
+			string newVar = "temp" + to_string(tempIndex++);
+			expr val = type->getVar(s.ctx(), newVar);
+			initCondVar(val, s, type);
+			init.insert(newVar);
+			result.push_back(com == val);
+		}
+		return mk_and(result);
+	}
+
+}
+
 expr EVisitor::memberAccess(Json::Value code, solver& s, bool isLeft)
 {
+
+	string typeName = code["expression"]["typeDescriptions"]["typeString"].asString();
+	if (typeName.substr(0, 9) == "type(enum")
+		return enumAccess(code, s, isLeft);
+
 	context& c = s.ctx();
 	
 	Type* type = getAllType(code["expression"]);
@@ -445,7 +574,8 @@ expr EVisitor::memberAccess(Json::Value code, solver& s, bool isLeft)
 	expr memAccess = structType->getMem(s.ctx(), code["memberName"].asString(), expression);
 	if (isLeft) {
 		Type* assignType = getAllType(code);
-		expr temp = assignType->getVar(s.ctx(), "temp" + to_string(tempIndex++));
+		string tempName = "temp" + to_string(tempIndex++);
+		expr temp = s.ctx().constant(tempName.c_str(), memAccess.get_sort());
 		expr newValue = structType->getNewStruct(s.ctx(), code["memberName"].asString(), temp, expression);
 		expr newStruct = visit(code["expression"], s, true);
 		s.add(newStruct == newValue);
@@ -464,6 +594,8 @@ expr EVisitor::paraList(Json::Value code, solver& s, bool isLeft)
 
 expr EVisitor::tupleExp(Json::Value code, solver& s, bool isLeft)
 {
+	if (code["components"].size() > 1)
+		return expr(s.ctx());
 	expr result = visit(code["components"][0], s, isLeft);
 	return result;
 }
@@ -473,11 +605,11 @@ expr EVisitor::other(Json::Value code, solver& s, bool isLeft)
 	return expr(s.ctx());
 }
 
-expr_vector EVisitor::tuppleExp(Json::Value code, solver& s)
+expr_vector EVisitor::tuppleExp(Json::Value code, solver& s, bool isLeft)
 {
 	expr_vector result(s.ctx());
 	for (auto i : code["components"])
-		result.push_back(visit(i, s));
+		result.push_back(visit(i, s, isLeft));
 	return result;
 }
 
@@ -586,11 +718,14 @@ bool MapVisitor::checkCompat(string id, Json::Value ast)
 {
 	if (type.find(id) == type.end())
 		throw std::exception("Missing type decl for var: ");
-	if (type[id] != "expr" && ast["typeDescriptions"]["typeString"].asString().find(type[id]) == string::npos) //check type compatitlity
+	string typeName = ast["typeDescriptions"]["typeString"].asString(); 
+	if (typeName.find('[') != string::npos) //find array
+		return false;
+	if (type[id] != "expr" && typeName.find(type[id]) == string::npos) //check type compatitlity
 		return false;
 	if (type[id] == "expr" && m->find(id) == m->end()) //type Expr for all kind of expression
 		return true;
-	if (m->find(id) != m->end() && getCode((*m)[id], sourceCode) == getCode(ast, sourceCode)) //check if the var already assignen
+	if (m->find(id) != m->end() && getCode((*m)[id]) == getCode(ast)) //check if the var already assignen
 		return true;
 	if (ast["nodeType"] != "BinaryOperation" && ast["nodeType"] != "UnaryOperation" && m->find(id) == m->end())
 		return true;
@@ -606,5 +741,5 @@ bool MapVisitor::primaryExpression(SolidityParser::PrimaryExpressionContext* ctx
 			(*m)[text] = ast;
 		return result;
 	}
-	return text == getCode(ast, sourceCode);
+	return text == getCode(ast);
 }

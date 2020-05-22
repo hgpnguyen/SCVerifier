@@ -115,7 +115,7 @@ bool Verifier::checkTrace(vector<pair<string, string>> traces, string typeConsta
 		*/
 		if (!checkTrToCode || !solvePath(path, *decodeSol, functionTree.getEncode())) {
 			auto end = Clock::now();
-			long long timeLimit = 1000000 * TIMELIMIT;
+			long long timeLimit = 100000 * TIMELIMIT;
 			if ((end - start).count() / 1000 > timeLimit)
 				return false;
 			s.add(removeOldSol(m, traces_expr));
@@ -229,10 +229,10 @@ bool Verifier::expression(Json::Value ctx, string leftId) {
 	return getCode(ctx) == leftId ? true : false;
 }
 
-check_result Verifier::solvePath(list<PathNode*> path, map<string, Json::Value> decodeSol, map<string, string> encodeSol)
+bool Verifier::solvePath(list<PathNode*> path, map<string, Json::Value> decodeSol, map<string, string> encodeSol)
 {
 	solver s(ctx);
-	EVisitor visitor("", decodeSol, encodeSol, currentContract);
+	EVisitor visitor("", decodeSol, encodeSol);
 	for (auto i : path) {
 		expr_vector temp = i->toZ3(visitor, s);
 		for (auto j : temp)
@@ -240,13 +240,12 @@ check_result Verifier::solvePath(list<PathNode*> path, map<string, Json::Value> 
 				s.add(j);
 	}
 	auto result = s.check();
-	if (result != sat) cout << result << endl;
-	else {
-		cout << s << endl;
+	/*cout << s << endl;
+	if (result == sat) {
 		cout << "SAT" << endl;
 		cout << s.get_model() << endl;
-	}
-	return result;
+	}*/
+	return result == sat;
 }
 
 
@@ -315,6 +314,68 @@ expr Verifier::removeOldSol(model& m, expr_vector vars)
 	return mk_or(orExp);
 }
 
+void Verifier::scanContract(Json::Value ast, vector<pair<string, Json::Value>>& vars)
+{
+	if (ast.isObject()) {
+		if (!ast.isMember("nodeType"))
+			return;
+		if (ast["nodeType"] == "ContractDefinition") {
+			string contractName = ast["name"].asString();
+			solver s(ctx);
+			for (auto node : ast["nodes"])
+				if (node["nodeType"] == "FunctionDefinition" && !node["body"].isNull()) {
+					string name = node["id"].asString();
+					functionsMap[name] = node;
+				}
+				else if (node["nodeType"] == "StructDefinition") {
+					try {
+						string name = node["name"].asString();
+						vector<pair<string, Type*>> vec;
+						for (auto mem : node["members"]) {
+
+							Type* type = getVarDeclType(mem["typeName"], s);
+							if (type == NULL)
+								continue;
+							vec.push_back({ mem["name"].asString(), type });
+						}
+
+						Struct* structType = new Struct(name, vec);
+						EVisitor::addGlobalVar(contractName + "." + name + ".Struct", { structType, 0 });
+					}
+					catch (std::exception e) {
+						ast["nodes"].append(node);
+					}
+				}
+				else if (node["nodeType"] == "ModifierDefinition") {
+					string id = node["id"].asString();
+					functionsMap[id] = node;
+				}
+				else if (node["nodeType"] == "EnumDefinition") {
+					string name = node["name"].asString();
+					vector<string> vec;
+					for (auto mem : node["members"])
+						vec.push_back(mem["name"].asString());
+					Enum* _enum = new Enum(name, vec);
+					EVisitor::addGlobalVar(contractName + "." + name + ".Enum", { _enum, 0 });
+				}
+				else if (node["nodeType"] == "VariableDeclaration")
+					vars.push_back(make_pair(contractName, node));
+
+
+			return;
+		}
+		for (auto i : ast.getMemberNames()) {
+			if (ast[i].isArray() || ast[i].isObject())
+				scanContract(ast[i], vars);
+		}
+	}
+	else if (ast.isArray()) {
+		for (auto i : ast)
+			if (i.isArray() || i.isObject())
+				scanContract(i, vars);
+	}
+}
+
 
 
 vector<pair<string, string>> Verifier::getTraceContrainst(string traces)
@@ -349,51 +410,14 @@ vector<pair<string, string>> Verifier::getTraceContrainst(string traces)
 
 void Verifier::getAllFunction(Json::Value ast)
 {
-	if (ast.isObject()) {
-		if (!ast.isMember("nodeType"))
-			return;
-		if (ast["nodeType"] == "ContractDefinition") {
-			string contractName = ast["name"].asString();
-			solver s(ctx);
-			for(auto node: ast["nodes"])
-				if (node["nodeType"] == "FunctionDefinition" && !node["body"].isNull()) {
-					string name = node["name"].asString();
-					if (name == "")
-						name += node["kind"].asString();
-					name += "(" + getParamStr(node["parameters"]["parameters"]) + ")";
-					functionsMap[contractName][name] = node;
-				}
-				else if (node["nodeType"] == "StructDefinition") {
-					string name = node["name"].asString();
-					vector<pair<string, Type*>> vec;
-					for (auto mem : node["members"]) {
-						Type* type = getVarDeclType(mem["typeName"], s, contractName);
-						vec.push_back({ mem["name"].asString(), type });
-					}
-
-					Struct* structType = new Struct(name, vec);
-					EVisitor::addGlobalVar(contractName + "." + name + ".Struct", { structType, 0 });
-				}
-
-			for (auto node : ast["nodes"])
-				if (node["nodeType"] == "VariableDeclaration") {
-					Type* type = getVarDeclType(node["typeName"], s, contractName);
-					if (type != NULL) {
-						EVisitor::addGlobalVar(node["id"].asString(), { type, 0 });
-					}
-				}
-
-			return;
+	vector<pair<string, Json::Value>> vars;
+	scanContract(ast, vars);
+	solver s(ctx);
+	for (auto var : vars) {
+		Type* type = getVarDeclType(var.second["typeName"], s);
+		if (type != NULL) {
+			EVisitor::addGlobalVar(var.second["id"].asString(), { type, 0 });
 		}
-		for (auto i : ast.getMemberNames()) {
-			if (ast[i].isArray() || ast[i].isObject())
-				getAllFunction(ast[i]);
-		}
-	}
-	else if (ast.isArray()) {
-		for (auto i : ast)
-			if (i.isArray() || i.isObject())
-				getAllFunction(i);
 	}
 }
 
@@ -528,15 +552,6 @@ pair <expr, ValType*> Verifier::convertToZ3(Json::Value exp, solver& s, map<stri
 	}
 }
 
-
-
-string Verifier::getCode(Json::Value ctx) {
-	vector<string> location;
-	split(ctx["src"].asString(), location, ':');
-	string result = sourceCode.substr(stoi(location[0]), stoi(location[1]));
-	result.erase(remove_if(result.begin(), result.end(), ::isspace), result.end());
-	return result;
-}
 
 string Verifier::encode(string code, map<string, string> & encodeDict, int& i) {
 		if (encodeDict.find(code) != encodeDict.end())

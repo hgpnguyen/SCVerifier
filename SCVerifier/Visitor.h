@@ -56,7 +56,6 @@ public:
 
 class EVisitor {
 	string prefix;
-	string currentContract;
 	int tempIndex = 0; // To encode Function Call
 	
 	map <string, string> encodeSol; //To encode Function Call
@@ -67,11 +66,10 @@ class EVisitor {
 	static map < string, pair<Type*, int>> Globalvars;
 public:
 
-	EVisitor(string prefix, map<string, Json::Value>& decodeSol, map<string, string>& encodeSol, string currentContract) {
+	EVisitor(string prefix, map<string, Json::Value>& decodeSol, map<string, string>& encodeSol) {
 		this->prefix = prefix;
 		this->decodeSol = decodeSol;
 		this->encodeSol = encodeSol;
-		this->currentContract = currentContract;
 	}
 
 	expr visit(Json::Value code, solver& s, bool isLeft = false);
@@ -80,6 +78,7 @@ public:
 	static void addGlobalVar(string name, pair<Type*, int > var) { Globalvars[name] = var; }
 	static pair<Type*, int > findGlobalVar(string name) { if (Globalvars.find(name) != Globalvars.end()) return Globalvars[name]; else return { NULL, -1 }; }
 	void resetVar() { vars.clear(); }
+	static void resetGlobalvar() { Globalvars.clear(); }
 
 private:
 	expr exprStmt(Json::Value, solver& s, bool isLeft = false);
@@ -97,7 +96,7 @@ private:
 	expr paraList(Json::Value code, solver& s, bool isLeft = false);
 	expr tupleExp(Json::Value code, solver& s, bool isLeft = false);
 	expr other(Json::Value code, solver& s, bool isLeft = false);
-	expr_vector tuppleExp(Json::Value code, solver& s);
+	expr_vector tuppleExp(Json::Value code, solver& s, bool isLeft = false);
 
 
 
@@ -105,6 +104,8 @@ private:
 	string encode(string code);
 	int findVar(string name);
 	expr memberAccess2(Json::Value code, solver& s, bool isLeft = false);
+	expr enumAccess(Json::Value code, solver& s, bool isLeft = false);
+	expr assignTuple(Json::Value code, solver& s, bool isLeft = false);
 
 };
 

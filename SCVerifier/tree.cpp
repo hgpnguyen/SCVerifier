@@ -42,6 +42,9 @@ list<TreeNode*> TreeRoot::visit(Json::Value ctx, int depth)
 	switchCase["BinaryOperation"] = &TreeRoot::binaryOp;
 	switchCase["UnaryOperation"] = &TreeRoot::unaryOp;
 	switchCase["ParameterList"] = &TreeRoot::parameterList;
+	switchCase["WhileStatement"] = &TreeRoot::whileStmt;
+	switchCase["DoWhileStatement"] = &TreeRoot::doWhileStmt;
+	switchCase["PlaceholderStatement"] = &TreeRoot::placeHolderStmt;
 	string nodeType = ctx["nodeType"].asString();
 	auto func = switchCase.find(nodeType) != switchCase.end() ? switchCase[nodeType] : &TreeRoot::otherStmt;
 	auto result = (this->*func)(ctx, depth);
@@ -71,7 +74,7 @@ list<TreeNode*> TreeRoot::ifStmt(Json::Value ctx, int depth)
 
 	//assert(b); c1 -> t{#b}c1
 	Json::Value assert_ = createExprStmt(createAssert(ctx["condition"]));
-	string cond_str = getCode(ctx["condition"], sourceCode);
+	string cond_str = getCode(ctx["condition"]);
 	string code = "assert(" + cond_str + ");stmt";
 	string enStr = encodeExt(code, assert_);
 	truebr.push_back(new LeafNode(enStr));
@@ -101,7 +104,7 @@ list<TreeNode*> TreeRoot::forStmt(Json::Value ctx, int depth)
 	list<TreeNode*> cond2(cond);
 	list<TreeNode*> loopExpr = visit(ctx["loopExpression"], depth);
 	list<TreeNode*> body = visit(ctx["body"], depth);
-	string cond_str = getCode(ctx["condition"], sourceCode);
+	string cond_str = getCode(ctx["condition"]);
 
 	//init => e
 	result.splice(result.end(), initExpr);
@@ -134,7 +137,7 @@ list<TreeNode*> TreeRoot::whileStmt(Json::Value ctx, int depth)
 	list<TreeNode*> cond = visit(ctx["condition"], depth);
 	list<TreeNode*> body = visit(ctx["body"], depth);
 	list<TreeNode*> cond2(cond);
-	string cond_str = getCode(ctx["condition"], sourceCode);
+	string cond_str = getCode(ctx["condition"]);
 
 	//(assert(b);c)* => (t{b}a)*
 	Json::Value assert_ = createExprStmt(createAssert(ctx["condition"]));
@@ -171,7 +174,7 @@ list<TreeNode*> TreeRoot::doWhileStmt(Json::Value ctx, int depth)
 list<TreeNode*> TreeRoot::returnStmt(Json::Value ctx, int depth)
 {
 	list<TreeNode*> expr = visit(ctx["expression"], depth);
-	string code = getCode(ctx, sourceCode);
+	string code = getCode(ctx);
 	string enStr = encodeExt(code, ctx);
 	list<TreeNode*> result = { new LeafNode(enStr) };
 	result.splice(result.end(), expr);
@@ -205,13 +208,22 @@ list<TreeNode*> TreeRoot::unaryOp(Json::Value ctx, int depth)
 	return visit(ctx["subExpression"], depth);
 }
 
+list<TreeNode*> TreeRoot::placeHolderStmt(Json::Value ctx, int depth)
+{
+	if (func["modifiers"].empty())
+		return visit(func["body"], depth);
+	Json::Value mod;
+	func["modifiers"].removeIndex(0, &mod);
+	return modifier(mod, depth);
+}
+
 list<TreeNode*> TreeRoot::otherStmt(Json::Value ctx, int depth)
 {
 	if (ctx["nodeType"].asString().find("Statement") == string::npos) {
 		return list<TreeNode*>();
 	}
 	list<TreeNode*> result;
-	string code = getCode(ctx, sourceCode);
+	string code = getCode(ctx);
 	code = code + "stmt";
 	string enStr = encode(code);
 	result.push_back(new LeafNode(enStr));
@@ -225,13 +237,26 @@ list<TreeNode*> TreeRoot::functionCall(Json::Value ctx, int depth)
 	if (ctx["expression"]["nodeType"] == "Identifier" && ctx["expression"]["name"] == "assert")
 		return visit(ctx["arguments"][0], depth);
 	list<TreeNode*> result;
-	string funcName = ctx["expression"]["name"].isNull() ? getCode(ctx["expression"], sourceCode) : ctx["expression"]["name"].asString() + "(" + getParamStr(ctx["arguments"]) + ")"; //type Conversion function dont have name
+	string funcName = ctx["expression"]["name"].isNull() ? getCode(ctx["expression"]) : ctx["expression"]["name"].asString() + "(" + getParamStr(ctx["arguments"]) + ")"; //type Conversion function dont have name
 	map<string, Json::Value>::iterator iter;
 	if (depth == 0 || (iter = functionsMap.find(funcName)) == functionsMap.end()) {
 		return list<TreeNode*>();
 	};
-	auto temp = visit(iter->second, depth - 1);
-	string code = getCode(ctx, sourceCode);
+	Json::Value function = iter->second;
+	list<TreeNode*> temp;
+	temp.splice(temp.end(), visit(function["returnParameters"], depth - 1));
+	temp.splice(temp.end(), varDeclList(function["parameters"]["parameters"], ctx["arguments"], depth - 1));
+	if (function["modifiers"].empty())
+		temp.splice(temp.end(), visit(function["body"], depth - 1));
+	else {
+		Json::Value tempFunc, mod;
+		tempFunc = func;
+		function["modifiers"].removeIndex(0, &mod);
+		temp.splice(temp.end(), modifier(mod, depth - 1));
+		func = tempFunc;
+	}
+
+	string code = getCode(ctx);
 	string enStr = encodeExt(code, ctx);
 	result.push_back(new VarNode(enStr, temp));
 	return result;
@@ -240,22 +265,51 @@ list<TreeNode*> TreeRoot::functionCall(Json::Value ctx, int depth)
 list<TreeNode*> TreeRoot::functionDef(Json::Value ctx, int depth)
 {
 	list<TreeNode*> result;
-	auto para = visit(ctx["parameters"], depth);
+	list<Json::Value> mods;
 	result.splice(result.end(), visit(ctx["parameters"], depth));
 	result.splice(result.end(), visit(ctx["returnParameters"], depth));
-	result.splice(result.end(), visit(ctx["body"], depth));
+	if (func["modifiers"].empty())
+		result.splice(result.end(), visit(ctx["body"], depth));
+	else {
+		Json::Value mod;
+		func["modifiers"].removeIndex(0, &mod);
+		result.splice(result.end(), modifier(mod, depth));
+	}
 	return result;
 }
 
 list<TreeNode*> TreeRoot::parameterList(Json::Value ctx, int depth)
 {
 	list<TreeNode*> result;
-	string code = getCode(ctx, sourceCode);
+	string code = getCode(ctx);
 	code = code;
 	string enStr = encode(code);
 	result.push_back(new LeafNode(enStr));
 	if (decodeSol.find(enStr) == decodeSol.end())
 		decodeSol[enStr] = ctx;
+	return result;
+}
+
+list<TreeNode*> TreeRoot::modifier(Json::Value ctx, int depth)
+{
+	string id = ctx["modifierName"]["referencedDeclaration"].asString();
+	Json::Value mod = functionsMap[id];
+	list<TreeNode*> result;
+	result.splice(result.end(), varDeclList(mod["parametes"]["parameters"], ctx["arguments"], depth));
+	if (mod["body"].isNull()) {
+		placeHolderStmt(Json::Value(), depth);
+	}
+	result.splice(result.end(), visit(mod["body"], depth));
+	return result;
+}
+
+list<TreeNode*> TreeRoot::varDeclList(Json::Value parameters, Json::Value initValue, int depth)
+{
+	list<TreeNode*> result;
+	for (int i = 0; i < parameters.size(); ++i) {
+		Json::Value varDeclStmt = createVarDeclStmt(parameters[i], initValue[i]);
+		result.splice(result.end(), visit(varDeclStmt, depth));
+	}
 	return result;
 }
 
@@ -392,12 +446,14 @@ expr_vector FuncNode::toZ3(EVisitor& visitor, solver& s)
 	expr_vector result(s.ctx());
 	ValType* type = getType(visitor.toJson(value));
 
-	EVisitor newVistor = visitor;
-	newVistor.resetVar();
+	EVisitor newVisitor = visitor;
+	newVisitor.resetVar();
 	for (auto child : children) {
-		expr_vector temp = child->toZ3(newVistor, s);
+		expr_vector temp = child->toZ3(newVisitor, s);
 		for (auto i : temp)
 			result.push_back(i);
+		if (newVisitor.toJson(child->getValue())["nodeType"].asString() == "Return")
+			break;
 	}
 	if (type != NULL) {
 		if (result.size() == 0)

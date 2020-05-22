@@ -101,6 +101,7 @@ class TreeRoot {
 	map<string, string> encodeSol;
 	map<string, Json::Value> decodeSol;
 	map<string, Json::Value> functionsMap;
+	Json::Value func;
 	int index = 0;
 
 public:
@@ -109,6 +110,7 @@ public:
 	}
 	TreeRoot(Json::Value ast, int depth, map<string, Json::Value> functionsMap) {
 		this->functionsMap = functionsMap;
+		this->func = ast;
 		this->childrens = visit(ast, depth);
 	}
 
@@ -130,11 +132,15 @@ private:
 	list<TreeNode*> assignment(Json::Value ctx, int depth);
 	list<TreeNode*> binaryOp(Json::Value ctx, int depth);
 	list<TreeNode*> unaryOp(Json::Value ctx, int depth);
+	list<TreeNode*> placeHolderStmt(Json::Value ctx, int depth);
 	list<TreeNode*> otherStmt(Json::Value ctx, int depth);
 
 	list<TreeNode*> functionCall(Json::Value ctx, int depth);
 	list<TreeNode*> functionDef(Json::Value ctx, int depth);
 	list<TreeNode*> parameterList(Json::Value ctx, int depth);
+
+	list<TreeNode*> modifier(Json::Value ctx, int depth);
+	list<TreeNode*> varDeclList(Json::Value parameters, Json::Value initValue, int depth);
 
 	string encode(string code);
 	string encodeExt(string code, Json::Value ctx);

@@ -55,9 +55,11 @@ expr Struct::getNewStruct(context& c, string funcName, expr temp, expr var)
 func_decl Struct::reconstruct(context& c, func_decl_vector& projs)
 {
 	int size = listType.size();
-	char* _names[10];
-	z3::sort sorts[10] = { c.int_sort(), c.int_sort(), c.int_sort(), 
-		c.int_sort(), c.int_sort(), c.int_sort(), c.int_sort(), c.int_sort(), c.int_sort(), c.int_sort() };
+	char* _names[20];
+	z3::sort sorts[20] = { c.int_sort(), c.int_sort(), c.int_sort(), 
+		c.int_sort(), c.int_sort(), c.int_sort(), c.int_sort(), c.int_sort(), c.int_sort(), c.int_sort(),
+		c.int_sort(), c.int_sort(), c.int_sort(), c.int_sort(), c.int_sort(), c.int_sort(), c.int_sort(), 
+		c.int_sort(), c.int_sort(), c.int_sort() };
 
 	int i = 0;
 	for (auto mem : listType) {
@@ -66,4 +68,33 @@ func_decl Struct::reconstruct(context& c, func_decl_vector& projs)
 	}
 	func_decl structDecl = c.tuple_sort(name.c_str(), size, _names, sorts, projs);
 	return structDecl;
+}
+
+z3::sort Enum::getSort(context& c)
+{
+	func_decl_vector enum_consts(c);
+	return reconstruct(c, enum_consts);
+}
+
+expr Enum::getVal(context& c, string varName)
+{
+	func_decl_vector enum_consts(c);
+	reconstruct(c, enum_consts);
+
+	for (unsigned i = 0; i < listMem.size(); ++i)
+		if (varName == listMem[i])
+			return enum_consts[i]();
+
+	return expr(c);
+}
+
+z3::sort Enum::reconstruct(context& c, func_decl_vector& enum_consts)
+{
+	char* _names[30];
+	for (unsigned i = 0; i < listMem.size(); ++i)
+		_names[i] = _strdup(listMem[i].c_str());
+
+	func_decl_vector enum_testers(c);
+	z3::sort s = c.enumeration_sort(name.c_str(), listMem.size(), _names, enum_consts, enum_testers);
+	return s;
 }

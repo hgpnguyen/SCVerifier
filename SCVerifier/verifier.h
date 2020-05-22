@@ -45,8 +45,7 @@ struct Verifier {
 	vector<SolEncode> Lencode; //remove
 	map<string, vector<string>> functionCodeList;
 	map<string, ExpInfo> expList;
-	map<string, map<string, Json::Value>> functionsMap;
-	string currentContract;
+	map<string, Json::Value> functionsMap;
 	typedef expr(* pfunc) (expr l, expr r);
 
 
@@ -61,7 +60,6 @@ private:
 
 	pair <expr, ValType*> convertToZ3(Json::Value exp, solver& s, map<string, pfunc> opConvert,
 		map<string, pair<Type*, int>>& vars, bool increase = false);
-	string getCode(Json::Value ctx);
 	string encode(string code, map<string, string>& encodeDict, int& index);
 	string removeCond(string encodeStr);
 	vector<pair<string, int>> getConstraints(string traces_str, model m, expr_vector vars);
@@ -76,11 +74,12 @@ private:
 	bool expression(Json::Value ctx, string leftId);
 	//string encodeExt(string code, Json::Value ctx);
 
-	check_result solvePath(list<PathNode*> path, map<string, Json::Value> decodeSol, map<string, string> encodeSol);
+	bool solvePath(list<PathNode*> path, map<string, Json::Value> decodeSol, map<string, string> encodeSol);
 	list<PathNode*> convertToPath(string path, model m);
 	expr_vector convertFuncCall(string var);
 	bool mapTraceToCode(list<PathNode*> path, string traces, map<string, string> typeConstranit, map<string, Json::Value>& decodeSol);
 	expr removeOldSol(model& m, expr_vector vars);
+	void scanContract(Json::Value ast, vector<pair<string, Json::Value>>& vars);
 
 
 };

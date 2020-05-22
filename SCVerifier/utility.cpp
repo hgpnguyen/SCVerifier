@@ -63,18 +63,40 @@ void split(const std::string& str, vector<string>& cont, string delim)
 	cont.push_back(str.substr(previous, current - previous));
 }
 
-
-string getCode(Json::Value ctx, string sourceCode)
+string getCode(Json::Value ctx)
 {
-	vector<string> location;
-	split(ctx["src"].asString(), location, ':');
-	string result = sourceCode.substr(stoi(location[0]), stoi(location[1]));
-	result.erase(remove_if(result.begin(), result.end(), ::isspace), result.end());
+	typedef string(*pfunc)(Json::Value);
+	map<string, pfunc> switchCase;
+
+	switchCase["ExpressionStatement"] = getExprStmtStr;
+	switchCase["Identifier"] = getIdStr;
+	switchCase["FunctionCall"] = getFuncCallStr;
+	switchCase["Assignment"] = getAssignStr;
+	switchCase["BinaryOperation"] = getBinaryOpStr;
+	switchCase["UnaryOperation"] = getUnaryOpStr;
+	switchCase["IndexAccess"] = getIndexAccessStr;
+	switchCase["MemberAccess"] = getMemberAccessStr;
+	switchCase["ParameterList"] = getParaListStr;
+	switchCase["VariableDeclaration"] = getVarDeclStr;
+	switchCase["Literal"] = getLitStr;
+	switchCase["TupleExpression"] = getTupleExpStr;
+	switchCase["ElementaryTypeName"] = getEleTypeNameStr;
+	switchCase["UserDefinedTypeName"] = getUserDefTypeNameStr;
+	switchCase["ArrayTypeName"] = getArrayTypeNameStr;
+	switchCase["EmitStatement"] = getEmitStmtStr;
+	switchCase["Return"] = getReturnStr;
+	switchCase["ElementaryTypeNameExpression"] = getEleTypeNameExpStr;
+	switchCase["VariableDeclarationStatement"] = getVarDeclStmtStr;
+	switchCase["NewExpression"] = getNewExpStr;
+	switchCase["Conditional"] = getCondStr;
+	string nodeType = ctx["nodeType"].asString();
+	auto func = switchCase.find(nodeType) != switchCase.end() ? switchCase[nodeType] : getOtherStr;
+	string result = func(ctx);
 	return result;
 }
 
 void addExp(Json::Value exp, string codeExcute, bool isTrue, Verifier& global) {
-	string codeExp = getCode(exp, sourceCode);
+	string codeExp = getCode(exp);
 	if (!isTrue)
 		codeExp = "!(" + codeExp + ")";
 	if (global.expList.find(codeExp) == global.expList.end()) {
@@ -358,17 +380,30 @@ void int2Bv(pair<expr*, ValType*>& p, int size) {
 	p.second = &Byte(p.second->getSize());
 }
 
+bool* str2bv(string str)
+{
+	bool* bv = new bool[str.size() * 8];
+	for(size_t i = 0; i < str.size(); ++i)
+	{
+		string temp = bitset<8>(str.c_str()[i]).to_string();
+		for (size_t j = 0; j < temp.size(); ++j)
+			bv[8 * i + j] = temp[j] == '1';
+	}
+	return bv;
+}
+
 void extend(pair<expr*, ValType*>& p, unsigned int i) {
 	*p.first = to_expr(p.first->ctx(), Z3_mk_zero_ext(p.first->ctx(), i, *p.first));
 	p.second->changeSize(p.second->getSize() + i);
 }
 
 void preCheck(pair<expr*, ValType*>& l, pair<expr*, ValType*>& r, string op) {
-	vector<string> vec = { "&", "|", "^", "**" };
+	vector<string> vec = { "&", "|", "^", "**", ">>", "<<" };
 	if (find(vec.begin(), vec.end(), op) != vec.end() && l.first->is_int() && r.first->is_int()) {
 		int2Bv(l);
 		int2Bv(r);
 	}
+
 
 	if (l.first->is_bv() && !r.first->is_bv())
 		int2Bv(r, l.second->getSize());
@@ -415,12 +450,46 @@ Json::Value createUnary(Json::Value param, string op)
 	return unary;
 }
 
+Json::Value createBinary(Json::Value left, Json::Value right, Json::Value type, string op)
+{
+	Json::Value binary;
+	binary["nodeType"] = "BinaryOperation";
+	binary["leftExpression"] = left;
+	binary["rightExpression"] = right;
+	binary["operator"] = op;
+	binary["typeDescriptions"] = type;
+	return binary;
+}
+
 Json::Value createExprStmt(Json::Value param)
 {
 	Json::Value exprStmt;
 	exprStmt["nodeType"] = "ExpressionStatement";
 	exprStmt["expression"] = param;
 	return exprStmt;
+}
+
+Json::Value createVarDeclStmt(Json::Value varDecl, Json::Value init)
+{
+	Json::Value varDeclStmt;
+	varDeclStmt["declarations"] = Json::arrayValue;
+	varDeclStmt["declarations"].append(varDecl);
+	varDeclStmt["initialValue"] = init;
+	varDeclStmt["nodeType"] = "VariableDeclarationStatement";
+
+	return varDeclStmt;
+}
+
+Json::Value createAssign(Json::Value left, Json::Value right, string op)
+{
+	Json::Value assign;
+	assign["nodeType"] = "Assignment";
+	assign["leftHandSide"] = left;
+	assign["rightHandSide"] = right;
+	assign["operator"] = op;
+	assign["typeDescriptions"] = left["typeDescriptions"];
+
+	return assign;
 }
 
 
@@ -498,23 +567,36 @@ TreeRoot* convertFunction(Json::Value, int depth)
 ValType* getType(Json::Value exp) {
 	string type = exp["typeDescriptions"]["typeString"].asString();
 	bool isLiteral = exp["nodeType"].asString() == "Literal" || type.find("const") != string::npos;
-	if (type.find("uint") != string::npos)
-		return new UInt(isLiteral ? 256 : stoul(type.substr(4, type.length())) );
-	if (type.find("int") != string::npos)
+	vector<string> cont;
+	split(type, cont, " ");
+	if (cont[0] == "enum") {
+		string enumName = cont[1] + ".Enum";
+		auto enumType = EVisitor::findGlobalVar(enumName);
+		if (enumType.first == NULL)
+			throw std::exception("Can't find Struc: ");
+		return dynamic_cast<Enum*>(enumType.first);
+	}
+	if (cont[0] == "bytes")
+		return NULL;
+	type = cont[0];
+	if(type.find("[") != string::npos)
+		return NULL;
+	/*if (type.find("tuple") != string::npos)
+		return NULL;*/
+	if (type.substr(0, 3) == "int")
 		return new Int(isLiteral ? 256 : stoul(type.substr(3, type.length())));
-	if (type.find("bool") != string::npos)
+	if (type.substr(0, 4) == "uint")
+		return new UInt(isLiteral ? 256 : stoul(type.substr(4, type.length())) );
+	if (type.substr(0, 4) == "bool")
 		return new Bool() ;
-	if (type.find("address") != string::npos)
+	if (type.substr(0, 7) == "address")
 		return new Address();
-	if (type.find("bytes") != string::npos)
+	if (type.substr(0, 5) == "bytes")
 		return new Byte(stoul(type.substr(5, type.length())) * 8);
-	if (type.find("literal_string") != string::npos)
-		if (exp["value"].isNull()) 
+	if (type.substr(0, 14) == "literal_string")
 			return new Byte(256); 
-		else 
-			return new String();
-	if (type.find("string") != string::npos)
-		return  new String();
+	if (type.substr(0, 6) == "string")
+		return  new Byte(256);
 	/*if (type.find("tuple()") != string::npos)
 		return NULL;
 	if (type.find("msg") != string::npos)
@@ -525,28 +607,75 @@ ValType* getType(Json::Value exp) {
 	//throw "Other type: " + type;
 }
 
+Type* getType(string type) {
+
+	if (type.substr(0, 3) == "int")
+		return new Int(stoul(type.substr(3, type.length())));
+	if (type.substr(0, 4) == "uint")
+		return new UInt(stoul(type.substr(4, type.length())));
+	if (type.substr(0, 4) == "bool")
+		return new Bool();
+	if (type.substr(0, 7) == "address")
+		return new Address();
+	if (type.substr(0, 5) == "bytes")
+		return new Byte(stoul(type.substr(5, type.length())) * 8);
+	vector<string> cont;
+	split(type, cont, " ");
+	if (cont[0] == "enum") {
+		string enumName = cont[1] + ".Enum";
+		auto enumType = EVisitor::findGlobalVar(enumName);
+		if (enumType.first == NULL)
+			throw std::exception("Can't find Enum: ");
+		return dynamic_cast<Enum*>(enumType.first);
+	}
+	else if (cont[0] == "struct") {
+		string structName = cont[1] + ".Struct";
+		auto structType = EVisitor::findGlobalVar(structName);
+		if (structType.first == NULL)
+			throw std::exception("Can't find Struct: ");
+		return dynamic_cast<Struct*>(structType.first);
+	}
+	return NULL;
+}
+
 Type* getAllType(Json::Value exp)
 {
 	string typeName = exp["typeDescriptions"]["typeString"].asString();
-	if (typeName.find("struct") != string::npos) {
-		auto start = typeName.find(" ");
-		auto end = typeName.find(" ", start + 1);
-		string structName = typeName.substr(start + 1, end - start - 1) + ".Struct";
+	vector<string> cont;
+	size_t t;
+	split(typeName, cont, " ");
+	if ((t = typeName.find("[")) != string::npos) {
+		auto temp = getType(typeName.substr(0, t));
+		if (temp == NULL)
+			return NULL;
+		return new Array(temp);
+	}
+	if (cont[0] == "struct") {
+		string structName = cont[1] + ".Struct";
 		auto type = EVisitor::findGlobalVar(structName);
 		if (type.first == NULL)
 			throw std::exception("Can't find Struc: ");
 		return type.first;
 	}
-	else if (typeName.find("[]") != string::npos)
-		return new Array(getType(exp));
-	else return getType(exp);
+	if (cont[0] == "enum") {
+		string enumName = cont[1] + ".Enum";
+		auto type = EVisitor::findGlobalVar(enumName);
+		if (type.first == NULL)
+			throw std::exception("Can't find Struc: ");
+		return type.first;
+	}
+	if (cont[0] == "bytes")
+		return new Array(new Byte(8));
+	if (cont[0] == "class")
+		return NULL;
+	
+	return getType(exp);
 
-	return nullptr;
 }
 
-Type* getVarDeclType(Json::Value code, solver& s, string contractName)
+Type* getVarDeclType(Json::Value code, solver& s)
 {
-	typedef Type* (*pfunc)(Json::Value, solver& s, string contractName);
+	typedef Type* (*pfunc)(Json::Value, solver& s);
 	map<string, pfunc> switchCase;
 	switchCase["ElementaryTypeName"] = eleType;
 	switchCase["ArrayTypeName"] = arrType;
@@ -555,7 +684,7 @@ Type* getVarDeclType(Json::Value code, solver& s, string contractName)
 	if (switchCase.find(code["nodeType"].asString()) == switchCase.end())
 		return NULL; //User Define Type;
 	auto func = switchCase[code["nodeType"].asString()];
-	return (*func)(code, s, contractName);
+	return (*func)(code, s);
 }
 
 map<string, string> getTypeConstraint(string typeConstraint)
@@ -576,15 +705,20 @@ map<string, string> getTypeConstraint(string typeConstraint)
 	return visitor.getType();
 }
 
-Type* userDefType(Json::Value code, solver& s, string contractName)
+Type* userDefType(Json::Value code, solver& s)
 {
-	string name = contractName + "." + code["name"].asString() + ".Struct";
-	if (code["typeDescriptions"]["typeString"].asString().substr(0, 8) == "contract")
-		return NULL;
+	vector<string> cont;
+	split(code["typeDescriptions"]["typeString"].asString(), cont, " ");
+	string name;
+	if (cont[0] == "struct")
+		name = cont[1] + ".Struct";
+	else if (cont[0] == "enum")
+		name = cont[1] + ".Enum";
+	else return NULL;
 	auto userType = EVisitor::findGlobalVar(name);
-	if (userType.first == NULL) 
-		throw std::exception("Not found Struct ");
-
+	if (userType.first == NULL) {
+		throw std::exception("Not found Struct or Enum");
+	}
 	return userType.first;
 }
 
@@ -613,6 +747,8 @@ map<string, pfunc> getOpConvert()
 	opConvert["|"] = bvor;
 	opConvert["&"] = bvand;
 	opConvert["^"] = bvxor;
+	opConvert[">>"] = rightShift;
+	opConvert["<<"] = leftShift;
 	opConvert["u-"] = neg;
 	opConvert["u!"] = notOP;
 	opConvert["u~"] = bvneg;
@@ -630,5 +766,170 @@ string getParamStr(Json::Value paramList)
 	}
 	if (!result.empty())
 		result.pop_back();
+	return result;
+}
+
+string getIdStr(Json::Value json)
+{
+	return json["name"].asString();
+}
+
+string getLitStr(Json::Value json)
+{
+	return json["value"].isNull() ? json["hexValue"].asString() : json["value"].asString();;
+}
+
+string getCondStr(Json::Value json)
+{
+	string cond = getCode(json["condition"]);
+	string trueExpr = getCode(json["trueExpression"]);
+	string falseExpr = getCode(json["falseExpression"]);
+	string result = cond + "?" + trueExpr + ":" + falseExpr;
+	return result;
+}
+
+string getNewExpStr(Json::Value json)
+{
+	string result = "new" + getCode(json["typeName"]);
+	return result;
+}
+
+string getAssignStr(Json::Value json)
+{
+	string left = getCode(json["leftHandSide"]);
+	string right = getCode(json["rightHandSide"]);
+	string result = left + json["operator"].asString() + right;
+	return result;
+}
+
+string getReturnStr(Json::Value json)
+{
+	string exp = json["expression"].isNull() ? "" : getCode(json["expression"]);
+	string result = "return" + exp + ";";
+	return result;
+}
+
+string getVarDeclStr(Json::Value json)
+{
+	string typeName = json["typeName"].isNull() ? "var" : getCode(json["typeName"]);
+	string result = typeName + json["name"].asString();
+	return result;
+}
+
+string getUnaryOpStr(Json::Value json)
+{
+	string sub = getCode(json["subExpression"]);
+	string result = json["operator"].asString() + sub;
+	return result;
+}
+
+string getBinaryOpStr(Json::Value json)
+{
+	string left = getCode(json["leftExpression"]);
+	string right = getCode(json["rightExpression"]);
+	string result = left + json["operator"].asString() + right;
+	return result;
+}
+
+string getTupleExpStr(Json::Value json)
+{
+	string comps = "";
+	for (auto comp : json["components"])
+		comps += getCode(comp) + ";";
+	string result = "(" + comps + ")";
+	return result;
+}
+
+string getFuncCallStr(Json::Value json)
+{
+	string funName = getCode(json["expression"]);
+	string args = "";
+	for (auto arg : json["arguments"])
+		args += getCode(arg) + ";";
+	if (!args.empty())
+		args.pop_back();
+	string result = funName + "(" + args + ")";
+	return result;
+}
+
+string getExprStmtStr(Json::Value json)
+{
+	return getCode(json["expression"]) + ";";
+}
+
+string getParaListStr(Json::Value json)
+{
+	string params = "";
+	for (auto param : json["parameters"])
+		params += getCode(param) + ",";
+	if (!params.empty())
+		params.pop_back();
+	return params;
+}
+
+string getEmitStmtStr(Json::Value json)
+{
+	string result = "event" + getCode(json["eventCall"]) + ";";
+	return result;
+}
+
+string getVarDeclStmtStr(Json::Value json)
+{
+	string varDecls = "";
+	for (auto decl : json["declarations"])
+		varDecls += getCode(decl) + ",";
+	if (!varDecls.empty())
+		varDecls.pop_back();
+	string init = json["initialValue"].isNull() ? "" : "=" + getCode(json["initialValue"]);
+	string result = varDecls + init + ";";
+	return result;
+}
+
+string getEleTypeNameStr(Json::Value json)
+{
+	return json["name"].asString();
+}
+
+string getIndexAccessStr(Json::Value json)
+{
+	string baseExpr = getCode(json["baseExpression"]);
+	string index = getCode(json["indexExpression"]);
+	string result = baseExpr + "[" + index + "]";
+	return result;
+}
+
+string getMemberAccessStr(Json::Value json)
+{
+	string expr = getCode(json["expression"]);
+	string result = expr + "." + json["memberName"].asString();
+	return result;
+}
+
+string getArrayTypeNameStr(Json::Value json)
+{
+	string baseType = getCode(json["baseType"]);
+	string length = json["length"].isNull() ? "" : getCode(json["length"]);
+	string result = baseType + "[" + length + "]";
+	return result;
+}
+
+string getEleTypeNameExpStr(Json::Value json)
+{
+	return json["typeName"].asString();
+}
+
+string getUserDefTypeNameStr(Json::Value json)
+{
+	return json["name"].asString();
+}
+
+string getOtherStr(Json::Value json)
+{
+	if (json["nodeType"].isNull())
+		return "";
+	string excep = "getString of other Nodetype: " + json["nodeType"].asString();
+	cout << excep << endl;
+	//throw std::exception(excep.c_str());
+	string result = json["nodeType"].asString() + json["id"].asString();
 	return result;
 }
