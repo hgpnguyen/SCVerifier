@@ -153,7 +153,7 @@ protected:
 public:
 	//static context* ctx;
 
-	virtual expr_vector toZ3(EVisitor& visitor, solver& s) = 0;
+	virtual void toZ3(EVisitor& visitor, solver& s) = 0;
 	virtual string DepthFS(bool isDepth = true) = 0;
 	virtual string getValue() { return value; };
 };
@@ -164,7 +164,7 @@ public:
 		this->value = value;
 	}
 	string DepthFS(bool isDepth = true) { return value; }
-	expr_vector toZ3(EVisitor& visitor, solver& s);
+	void toZ3(EVisitor& visitor, solver& s);
 };
 
 
@@ -176,7 +176,7 @@ public:
 		this->value = cond;
 	}
 	string DepthFS(bool isDepth = true) { return "{" + value + "}"; };
-	expr_vector toZ3(EVisitor& visitor, solver& s);
+	void toZ3(EVisitor& visitor, solver& s);
 
 };
 
@@ -190,6 +190,6 @@ public:
 	}
 	string DepthFS(bool isDepth = true);
 	list<PathNode*> getChildrent() { return children; }
-	expr_vector toZ3(EVisitor& visitor, solver& s);
+	void toZ3(EVisitor& visitor, solver& s);
 };
 #endif

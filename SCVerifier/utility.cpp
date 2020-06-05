@@ -89,6 +89,7 @@ string getCode(Json::Value ctx)
 	switchCase["VariableDeclarationStatement"] = getVarDeclStmtStr;
 	switchCase["NewExpression"] = getNewExpStr;
 	switchCase["Conditional"] = getCondStr;
+	switchCase["Mapping"] = getMappingStr;
 	string nodeType = ctx["nodeType"].asString();
 	auto func = switchCase.find(nodeType) != switchCase.end() ? switchCase[nodeType] : getOtherStr;
 	string result = func(ctx);
@@ -921,6 +922,14 @@ string getEleTypeNameExpStr(Json::Value json)
 string getUserDefTypeNameStr(Json::Value json)
 {
 	return json["name"].asString();
+}
+
+string getMappingStr(Json::Value json)
+{
+	string key = getCode(json["keyType"]);
+	string value = getCode(json["valueType"]);
+	string result = "mapping(" + key + "=>" + value + ")";
+	return result;
 }
 
 string getOtherStr(Json::Value json)

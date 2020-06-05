@@ -441,36 +441,30 @@ string FuncNode::DepthFS(bool isDepth)
 	return result;
 }
 
-expr_vector FuncNode::toZ3(EVisitor& visitor, solver& s)
+void FuncNode::toZ3(EVisitor& visitor, solver& s)
 {
-	expr_vector result(s.ctx());
-	ValType* type = getType(visitor.toJson(value));
+	Type* type = getAllType(visitor.toJson(value));
 
 	EVisitor newVisitor = visitor;
+	expr temp(s.ctx());
 	newVisitor.resetVar();
 	for (auto child : children) {
-		expr_vector temp = child->toZ3(newVisitor, s);
-		for (auto i : temp)
-			result.push_back(i);
-		if (newVisitor.toJson(child->getValue())["nodeType"].asString() == "Return")
+		if (newVisitor.toJson(child->getValue())["nodeType"].asString() == "Return") {
+			temp = newVisitor.visit(newVisitor.toJson(child->getValue()), s);
 			break;
+		} else child->toZ3(newVisitor, s);
 	}
 	if (type != NULL) {
-		if (result.size() == 0)
-			return result;
+		if (temp.to_string() == "null")
+			return;
 		expr funcVar = type->getVar(s.ctx(), value);
-		expr return_ = funcVar == result[result.size() - 1];
-		result.pop_back();
-		result.push_back(return_);
-		
+		expr return_ = funcVar == temp;
+		s.add(return_);
 	}
-
-	return result;
 }
 
-expr_vector CondNode::toZ3(EVisitor& visitor, solver& s)
+void CondNode::toZ3(EVisitor& visitor, solver& s)
 {
-	expr_vector result(s.ctx());
 	ANTLRInputStream input(value);
 	SolidityLexer lexer(&input);
 	CommonTokenStream tokens(&lexer);
@@ -478,16 +472,12 @@ expr_vector CondNode::toZ3(EVisitor& visitor, solver& s)
 	SolidityParser::ExpressionContext* tree = parser.expression();
 	CalVisitor calVisitor(&s, &visitor, m);
 	expr cond_expr = calVisitor.visitExpression(tree).as<expr>();
-	result.push_back(cond_expr);
-	return result;
+	s.add(cond_expr);
 }
 
-expr_vector StmtNode::toZ3(EVisitor& visitor, solver& s)
+void StmtNode::toZ3(EVisitor& visitor, solver& s)
 {
 	expr_vector result(s.ctx());
-	expr exp = visitor.visit(visitor.toJson(value), s);
-	if(exp.to_string() != "null")
-		result.push_back(exp);
+	visitor.visit(visitor.toJson(value), s);
 
-	return result;
 }

@@ -1,0 +1,11 @@
+Overflow: 
+getProfit(msg.sender) = 1
+now = 0
+SafeMath.add(investedETH[msg.sender];profit) = 0
+userWithdrawals = ((as const (Array (_ BitVec 160) Int))
+  11579289237316195423570985008687907853269984665640564039457584007913129639935)
+investedETH = ((as const (Array (_ BitVec 160) Int)) 0)
+msg.sender = #x0000000000000000000000000000000000000000
+lastInvest = ((as const (Array (_ BitVec 160) Int)) 0)
+profit = 1
+

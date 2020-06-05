@@ -39,6 +39,7 @@ struct SolEncode {
 	~SolEncode() {};
 };
 
+struct Report;
 
 struct Verifier {
 	context ctx;
@@ -51,7 +52,7 @@ struct Verifier {
 
 	void checkSas(string exp);
 	vector<pair<string, string>> getTraceContrainst(string traces);
-	bool checkTrace(vector<pair<string, string>> traces, string typeCOnstraint, TreeRoot& functionTree);
+	Report checkTrace(vector<pair<string, string>> traces, string typeCOnstraint, TreeRoot& functionTree);
 	bool checkCondofTrace(string traces_str, model m, expr_vector vars, string path);
 	expr_vector readTrace(string trace, solver& s);
 	void getAllFunction(Json::Value ast);
@@ -74,7 +75,7 @@ private:
 	bool expression(Json::Value ctx, string leftId);
 	//string encodeExt(string code, Json::Value ctx);
 
-	bool solvePath(list<PathNode*> path, map<string, Json::Value> decodeSol, map<string, string> encodeSol);
+	Report solvePath(list<PathNode*> path, map<string, Json::Value> decodeSol, map<string, string> encodeSol);
 	list<PathNode*> convertToPath(string path, model m);
 	expr_vector convertFuncCall(string var);
 	bool mapTraceToCode(list<PathNode*> path, string traces, map<string, string> typeConstranit, map<string, Json::Value>& decodeSol);
@@ -82,6 +83,26 @@ private:
 	void scanContract(Json::Value ast, vector<pair<string, Json::Value>>& vars);
 
 
+};
+
+struct Report {
+	bool result;
+	string report;
+
+	Report(bool result) {
+		this->result = result;
+	}
+
+	Report(bool result, model m) {
+		this->result = result;
+		for (unsigned i = 0; i < m.size(); i++) {
+			func_decl v = m[i];
+			assert(v.arity() == 0);
+			string name = v.name().str();
+			if(name[name.size()-1] == '0' && name.substr(0, 4) != "temp")
+				report += name.substr(0, name.size() - 1) + " = " + m.get_const_interp(v).to_string() + "\n";
+		}
+	}
 };
 
 

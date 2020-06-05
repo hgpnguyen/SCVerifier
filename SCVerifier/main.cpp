@@ -15,7 +15,7 @@ using namespace std;
 using namespace antlr4;
 
 
-bool fullCheck(Verifier& verifier, string trace, string constraints, vector<string> name, vector<TreeRoot> listFunc) {
+Report fullCheck(Verifier& verifier, string trace, string constraints, vector<string> name, vector<TreeRoot> listFunc) {
 	auto trace_ = verifier.getTraceContrainst(trace);
 	/*cout << "TRACE: ";
 	for (auto i : trace_) {
@@ -25,24 +25,24 @@ bool fullCheck(Verifier& verifier, string trace, string constraints, vector<stri
 	for (int i = 0; i < name.size(); ++i) {
 		//cout << name[i] << endl;
 		auto temp = listFunc[i];
-
-		bool check = verifier.checkTrace(trace_, constraints, temp);
+		Report report = verifier.checkTrace(trace_, constraints, temp);
+		bool check = report.result;
 		//cout << "-------------------------------------------------------------------------------" << endl;
 		CondNode::m.clear();
 		if (check)
-			return true;
+			return report;
 	}
-	return false;
+	return Report(false);
 }
 
-bool check1(Verifier& verifier, string trace, string constraints, vector<string> name, vector<TreeRoot> listFunc, int index) {
+/*bool check1(Verifier& verifier, string trace, string constraints, vector<string> name, vector<TreeRoot> listFunc, int index) {
 	auto trace_ = verifier.getTraceContrainst(trace);
 	/*cout << "TRACE: ";
 	for (auto i : trace_) {
 		cout << i.first << " ";
 	}
 	cout << endl;*/
-	string contractName = name[index].substr(0, name[index].find('.'));
+	/*string contractName = name[index].substr(0, name[index].find('.'));
 
 	//cout << name[index] << endl;
 	auto temp = listFunc[index];
@@ -54,9 +54,9 @@ bool check1(Verifier& verifier, string trace, string constraints, vector<string>
 		return true;
 	
 	return false;
-}
+}*/
 
-pair<int, int> checkContract(Json::Value json) {
+pair<int, int> checkContract(Json::Value json, string smartContract) {
 	Verifier verifier;
 
 
@@ -80,10 +80,41 @@ pair<int, int> checkContract(Json::Value json) {
 	string typeConstraint = "int x; expr E;";
 	//check1(verifier, trace2, typeConstraint, listContract, listFunc, 4);
 	int max, min;
-
-		max = fullCheck(verifier, trace, typeConstraint, listContract, listFunc);
-
-		min = fullCheck(verifier, trace2, typeConstraint, listContract, listFunc);
+	ofstream myfile;
+	myfile.open("./resources/report/" + smartContract + ".txt");
+	try {
+		Report re = fullCheck(verifier, trace, typeConstraint, listContract, listFunc);
+		max = re.result;
+		if (max) {
+			myfile<< "Overflow: \n";
+			myfile << re.report;
+			myfile << "\n";
+		}
+	}
+	catch (std::exception e) {
+		cout << "ERROR: " << e.what() << endl;
+		max = 3;
+	}
+	catch (...) {
+		cout << "ERROR" << endl;
+		max = 3;
+	}
+	try {
+		Report re = fullCheck(verifier, trace2, typeConstraint, listContract, listFunc);
+		min = re.result;
+		if (min) {
+			myfile << "Underflow: \n";
+			myfile << re.report;
+		}
+	}
+	catch (std::exception e) {
+		cout << "ERROR: " << e.what() << endl;
+		min = 3;
+	}
+	catch (...) {
+		cout << "ERROR" << endl;
+		min = 3;
+	}
 
 	EVisitor::resetGlobalvar();
 	return { max, min };
@@ -112,17 +143,17 @@ int main() {
 		Json::Value root;
 		root = readJson(path + "/" + smartContract + ".sol_json.ast");
 		pair<int, int> result;
-
-			result = checkContract(root);
-
-		/*catch (std::exception e) {
+		try {
+			result = checkContract(root, smartContract);
+		}
+		catch (std::exception e) {
 			cout << "ERROR: " << e.what() << endl;
 			result = { 3, 3 };
 		}
 		catch (...) {
 			cout << "ERROR" << endl;
 			result = { 3, 3 };
-		}*/
+		}
 		fout << smartContract << "," << result.first << "," << result.second << endl;
 		if (i >= end)
 			break;

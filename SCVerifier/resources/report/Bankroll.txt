@@ -1,0 +1,18 @@
+Overflow: 
+tokenPurchaseAllocation = 0
+msg.value = 100
+gooPurchaseAllocation = 11579289237316195423570985008687907853269984665640564039457584007913129639935
+tokenAllocation = 0
+gooAllocation = 1
+
+Underflow: 
+clanId = 0
+tokenPurchaseAllocation = 0
+reimbursement = 1
+tokensAmount = 1
+ERC20(tokenAddress).transferFrom(owner;address(clans);tokensAmount) = true
+clans.clanToken(clanId) = #x0000000000000000000000000000000000000000
+tokenAddress = #x0000000000000000000000000000000000000000
+clans.exists(clanId) = true
+owner = #x0000000000000000000000000000000000000000
+msg.sender = #x0000000000000000000000000000000000000000

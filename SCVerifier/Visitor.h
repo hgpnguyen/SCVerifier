@@ -79,6 +79,7 @@ public:
 	static pair<Type*, int > findGlobalVar(string name) { if (Globalvars.find(name) != Globalvars.end()) return Globalvars[name]; else return { NULL, -1 }; }
 	void resetVar() { vars.clear(); }
 	static void resetGlobalvar() { Globalvars.clear(); }
+	static void resetGlobalVarIndex();
 
 private:
 	expr exprStmt(Json::Value, solver& s, bool isLeft = false);
@@ -95,6 +96,7 @@ private:
 	expr memberAccess(Json::Value code, solver& s, bool isLeft = false);
 	expr paraList(Json::Value code, solver& s, bool isLeft = false);
 	expr tupleExp(Json::Value code, solver& s, bool isLeft = false);
+	expr conditional(Json::Value code, solver& s, bool isLeft = false);
 	expr other(Json::Value code, solver& s, bool isLeft = false);
 	expr_vector tuppleExp(Json::Value code, solver& s, bool isLeft = false);
 
@@ -106,6 +108,7 @@ private:
 	expr memberAccess2(Json::Value code, solver& s, bool isLeft = false);
 	expr enumAccess(Json::Value code, solver& s, bool isLeft = false);
 	expr assignTuple(Json::Value code, solver& s, bool isLeft = false);
+	expr createTemp(Type* type, solver& s);
 
 };
 

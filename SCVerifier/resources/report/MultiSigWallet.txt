@@ -1,0 +1,22 @@
+Overflow: 
+transactionId = 0
+owners.length = 2
+count = 11579289237316195423570985008687907853269984665640564039457584007913129639935
+owners = (store ((as const (Array Int (_ BitVec 160)))
+         #x0000000000000000000000000000000000000001)
+       1
+       #x0000000000000000000000000000000000000000)
+confirmations = ((as const (Array Int (Array (_ BitVec 160) Bool)))
+  (store ((as const (Array (_ BitVec 160) Bool)) false)
+         #x0000000000000000000000000000000000000000
+         true))
+i = 0
+
+Underflow: 
+owners.length = 0
+required = 0
+isOwner = ((as const (Array (_ BitVec 160) Bool)) false)
+address(this) = #x0000000000000000000000000000000000000000
+msg.sender = #xffffffffffffffffffffffffffffffffffffffff
+i = 0
+owner = #x0000000000000000000000000000000000000000

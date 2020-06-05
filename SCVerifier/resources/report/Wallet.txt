@@ -1,0 +1,10 @@
+Overflow: 
+c_maxOwners = 0
+uint(_owner) = 0
+m_numOwners = 11579289237316195423570985008687907853269984665640564039457584007913129639935
+m_ownerIndex = ((as const (Array Int Int))
+  11579289237316195423570985008687907853269984665640564039457584007913129639935)
+m_owners = ((as const (Array Int Int)) 0)
+isOwner(_owner) = false
+confirmAndCheck(_operation) = true
+

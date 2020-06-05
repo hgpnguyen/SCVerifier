@@ -52,7 +52,7 @@ void Verifier::checkSas(string exp) {
 
 }*/
 
-bool Verifier::checkTrace(vector<pair<string, string>> traces, string typeConstaint, TreeRoot& functionTree) {
+Report Verifier::checkTrace(vector<pair<string, string>> traces, string typeConstaint, TreeRoot& functionTree) {
 	solver s(ctx);
 	expr_vector traces_expr(ctx);
 	ctx.set("timeout", 3000);
@@ -113,21 +113,21 @@ bool Verifier::checkTrace(vector<pair<string, string>> traces, string typeConsta
 			cout << endl;
 		}
 		*/
-		if (!checkTrToCode || !solvePath(path, *decodeSol, functionTree.getEncode())) {
+		Report re(false);
+		if (!checkTrToCode || !(re = solvePath(path, *decodeSol, functionTree.getEncode())).result) {
 			auto end = Clock::now();
 			long long timeLimit = 100000 * TIMELIMIT;
 			if ((end - start).count() / 1000 > timeLimit)
-				return false;
+				return Report(false);
 			s.add(removeOldSol(m, traces_expr));
-
 		}
 		else {
+			return re;
 
-			return true;
 		}
 	}
 	//cout << endl;
-	return false;
+	return Report(false);
 }
 
 expr_vector Verifier::getAllPath(expr exp) {
@@ -229,23 +229,23 @@ bool Verifier::expression(Json::Value ctx, string leftId) {
 	return getCode(ctx) == leftId ? true : false;
 }
 
-bool Verifier::solvePath(list<PathNode*> path, map<string, Json::Value> decodeSol, map<string, string> encodeSol)
+Report Verifier::solvePath(list<PathNode*> path, map<string, Json::Value> decodeSol, map<string, string> encodeSol)
 {
 	solver s(ctx);
 	EVisitor visitor("", decodeSol, encodeSol);
 	for (auto i : path) {
-		expr_vector temp = i->toZ3(visitor, s);
-		for (auto j : temp)
-			if (j.is_bool())
-				s.add(j);
+		i->toZ3(visitor, s);
 	}
 	auto result = s.check();
-	/*cout << s << endl;
+	//cout << s << endl;
+	EVisitor::resetGlobalVarIndex();
 	if (result == sat) {
 		cout << "SAT" << endl;
-		cout << s.get_model() << endl;
-	}*/
-	return result == sat;
+		Report report(true, s.get_model());
+		return report;
+	}
+	
+	return Report(false);
 }
 
 

@@ -171,6 +171,7 @@ expr EVisitor::visit(Json::Value code, solver& s, bool isLeft)
 	switchCase["MemberAccess"] = &EVisitor::memberAccess;
 	switchCase["ParameterList"] = &EVisitor::paraList;
 	switchCase["TupleExpression"] = &EVisitor::tupleExp;
+	switchCase["Conditional"] = &EVisitor::conditional;
 	string nodeType = code["nodeType"].asString();
 	auto func = switchCase.find(nodeType) != switchCase.end() ? switchCase[nodeType] : &EVisitor::other;
 	expr result = (this->*func)(code, s, isLeft);
@@ -182,9 +183,17 @@ Json::Value EVisitor::toJson(string str)
 	return decodeSol[str]; 
 }
 
+void EVisitor::resetGlobalVarIndex()
+{
+	for (auto key : extract_keys(Globalvars)) 
+		Globalvars[key].second = 0;
+	
+}
+
 expr EVisitor::exprStmt(Json::Value code, solver& s, bool isLeft)
 {
-	return visit(code["expression"], s, isLeft);
+	visit(code["expression"], s, isLeft);
+	return expr(s.ctx());
 }
 
 expr EVisitor::varDeclStmt(Json::Value code, solver& s, bool isLeft)
@@ -230,8 +239,8 @@ expr EVisitor::varDeclStmt(Json::Value code, solver& s, bool isLeft)
 			}
 		}
 		if (result.size() >= 2)
-			return mk_and(result);
-		else if(result.size() == 1) return result[0];
+			s.add(mk_and(result));
+		else if(result.size() == 1) s.add(result[0]);
 		return expr(s.ctx());
 	}
 }
@@ -267,10 +276,7 @@ expr EVisitor::assignment(Json::Value code, solver& s, bool isLeft)
 	pair<expr*, ValType*> para = { &right, type };
 
 	if (right.to_string() == "null") {
-		string varName = "temp" + to_string(tempIndex++);
-		right = type->getVar(s.ctx(), varName);
-		initCondVar(right, s, type);
-		init.insert(varName);
+		right = createTemp(type, s);
 	}
 	if ((typeid(*type) == typeid(UInt) || typeid(*type) == typeid(Int)) && right.is_bv())
 		bv2int(para);
@@ -283,9 +289,9 @@ expr EVisitor::assignment(Json::Value code, solver& s, bool isLeft)
 	expr left = visit(code["leftHandSide"], s, true);
 	if (left.to_string() == "null")
 		throw std::exception("Left or Right is NULL");
-	expr result = left == right;
+	s.add(left == right);
 
-	return result;
+	return left;
 }
 
 expr EVisitor::binaryOp(Json::Value code, solver& s, bool isLeft)
@@ -429,8 +435,10 @@ expr EVisitor::literal(Json::Value code, solver& s, bool isLeft)
 
 expr EVisitor::functionCall(Json::Value code, solver& s, bool isLeft)
 {
-	if (code["expression"]["nodeType"] == "Identifier" && (code["expression"]["name"] == "assert" || code["expression"]["name"] == "require"))
-		return visit(code["arguments"][0], s);
+	if (code["expression"]["nodeType"] == "Identifier" && (code["expression"]["name"] == "assert" || code["expression"]["name"] == "require")) {
+		s.add(visit(code["arguments"][0], s));
+		return expr(s.ctx());
+	}
 	if (code["kind"].asString() == "structConstructorCall") {
 		Type* type = getAllType(code);
 		if (typeid(*type) != typeid(Struct))
@@ -439,16 +447,21 @@ expr EVisitor::functionCall(Json::Value code, solver& s, bool isLeft)
 		expr_vector vec(s.ctx());
 		map<string, Json::Value> m;
 		for (int i = 0; i < code["arguments"].size(); ++i) {
-			m[code["names"][i].asString()] = code["arguments"][i];
+			if (!code["names"][i].isNull())
+				m[code["names"][i].asString()] = code["arguments"][i];
+			else
+				vec.push_back(visit(code["arguments"][i], s, isLeft));
 		}
 		for (auto k : strucT->getListType())
-			vec.push_back(visit(m[k.first], s, isLeft));
+			if(m.find(k.first) != m.end())
+				vec.push_back(visit(m[k.first], s, isLeft));
 
 		func_decl structDecl = strucT->getStruct(s.ctx());
 		return structDecl(vec);
 	}
 	string name = getCode(code);
-	string varName = encode(name);
+	//string varName = encode(name);
+	string varName = name + to_string(0);
 	Type* type = getAllType(code);
 	expr result(s.ctx());
 	if (type != NULL)
@@ -536,23 +549,31 @@ expr EVisitor::assignTuple(Json::Value code, solver& s, bool isLeft)
 			expr temp = assignment(assign, s, isLeft);
 			result.push_back(temp);
 		}
-		return mk_and(result);
+		s.add(mk_and(result));
+		return expr(s.ctx());
 	}
 	else {
 		for (auto i : left["components"]) {
 			if (i.isNull())
 				continue;
-			ValType* type = getType(i);
+			Type* type = getAllType(i);
 			expr com = visit(i, s, true);
-			string newVar = "temp" + to_string(tempIndex++);
-			expr val = type->getVar(s.ctx(), newVar);
-			initCondVar(val, s, type);
-			init.insert(newVar);
+			expr val = createTemp(type, s);
 			result.push_back(com == val);
 		}
-		return mk_and(result);
+		s.add(mk_and(result));
+		return expr(s.ctx());
 	}
 
+}
+
+expr EVisitor::createTemp(Type* type, solver& s)
+{
+	string varName = "temp" + to_string(tempIndex++);
+	expr temp = type->getVar(s.ctx(), varName);
+	initCondVar(temp, s, type);
+	init.insert(varName);
+	return temp;
 }
 
 expr EVisitor::memberAccess(Json::Value code, solver& s, bool isLeft)
@@ -598,6 +619,18 @@ expr EVisitor::tupleExp(Json::Value code, solver& s, bool isLeft)
 		return expr(s.ctx());
 	expr result = visit(code["components"][0], s, isLeft);
 	return result;
+}
+
+expr EVisitor::conditional(Json::Value code, solver& s, bool isLeft)
+{
+	ValType* type = getType(code);
+	expr trueExp = visit(code["trueExpression"], s, isLeft);
+	expr falseExp = visit(code["falseExpression"], s, isLeft);
+	string name = "temp" + to_string(tempIndex++);
+	expr cond = s.ctx().constant(name.c_str(), trueExp.get_sort());
+	expr result = (cond == trueExp) || (cond == falseExp);
+	s.add(result);
+	return cond;
 }
 
 expr EVisitor::other(Json::Value code, solver& s, bool isLeft)

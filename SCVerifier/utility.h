@@ -113,6 +113,7 @@ string getMemberAccessStr(Json::Value json);
 string getArrayTypeNameStr(Json::Value json);
 string getEleTypeNameExpStr(Json::Value json);
 string getUserDefTypeNameStr(Json::Value json);
+string getMappingStr(Json::Value json);
 string getOtherStr(Json::Value json);
 
 

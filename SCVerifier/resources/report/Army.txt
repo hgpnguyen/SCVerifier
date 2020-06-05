@@ -1,0 +1,18 @@
+Overflow: 
+gooSpent = 2695994666715063979466715087019630673637144422540572481103610249215
+gooBankroll = 1
+operator = ((as const (Array (_ BitVec 160) Bool)) true)
+
+Underflow: 
+allocatedWarFundSnapshots.length = 0
+defenseLoss = 0
+lootingLoss = 0
+totalArmyPower = 0
+attackLoss = 1
+lastArmyPowerUpdate = ((as const (Array (_ BitVec 160) Int)) 1)
+armyPowerSnapshots = ((as const (Array (_ BitVec 160) (Array Int ArmyPower)))
+  ((as const (Array Int ArmyPower)) (ArmyPower 0 1 7719)))
+operator = ((as const (Array (_ BitVec 160) Bool)) true)
+player = #x0000000000000000000000000000000000000000
+snapshotDay = 0
+existingArmyPower = (ArmyPower 0 1 7719)
