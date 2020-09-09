@@ -1,6 +1,6 @@
 #include "verifier.h"
 #include "utility.h"
-
+#include "synthesis.h"
 
 void Verifier::checkSas(string exp) {
 
@@ -78,7 +78,7 @@ Report Verifier::checkTrace(vector<pair<string, string>> traces, string typeCons
 			int num = count(t.second.begin(), t.second.end(), ';');
 			expr exp = makeStringFunction(&ctx, t.first);
 			if (!union_.is_re())					//Function with empty block
-				return false;
+				return Report(false, ctx);
 			s.add(in_re(exp, union_.loop(num, num)));
 			traces_expr.push_back(exp);
 		}
@@ -113,12 +113,13 @@ Report Verifier::checkTrace(vector<pair<string, string>> traces, string typeCons
 			cout << endl;
 		}
 		*/
-		Report re(false);
+		Report re(false, ctx);
 		if (!checkTrToCode || !(re = solvePath(path, *decodeSol, functionTree.getEncode())).result) {
 			auto end = Clock::now();
-			long long timeLimit = 100000 * TIMELIMIT;
-			if ((end - start).count() / 1000 > timeLimit)
-				return Report(false);
+			auto lengthOftime = std::chrono::duration_cast<std::chrono::seconds>(end - start).count();
+			long long timeLimit = TIMELIMIT;
+			if (lengthOftime > timeLimit)
+				return Report(false, ctx);
 			s.add(removeOldSol(m, traces_expr));
 		}
 		else {
@@ -127,7 +128,7 @@ Report Verifier::checkTrace(vector<pair<string, string>> traces, string typeCons
 		}
 	}
 	//cout << endl;
-	return Report(false);
+	return Report(false, ctx);
 }
 
 expr_vector Verifier::getAllPath(expr exp) {
@@ -233,19 +234,27 @@ Report Verifier::solvePath(list<PathNode*> path, map<string, Json::Value> decode
 {
 	solver s(ctx);
 	EVisitor visitor("", decodeSol, encodeSol);
+	Report re = Report(false, ctx);
+	Json::Value account = re.rpcCall("eth_accounts", Json::arrayValue);
+	if (account.isMember("result")) {
+		expr acc = ctx.bv_const("msg.sender_0", 160);
+		expr accVal = ctx.bv_val(160, hex_str_to_bool_arr(160, account["result"][0].asString()));
+		s.add(acc == accVal);
+	}
 	for (auto i : path) {
 		i->toZ3(visitor, s);
 	}
 	auto result = s.check();
-	//cout << s << endl;
 	EVisitor::resetGlobalVarIndex();
 	if (result == sat) {
-		cout << "SAT" << endl;
-		Report report(true, s.get_model());
+		//cout << s << endl;
+		//cout << "SAT" << endl;
+		model m = s.get_model();
+		Report report(true, m, visitor, CondNode::m);
 		return report;
 	}
 	
-	return Report(false);
+	return Report(false, ctx);
 }
 
 
@@ -321,11 +330,18 @@ void Verifier::scanContract(Json::Value ast, vector<pair<string, Json::Value>>& 
 			return;
 		if (ast["nodeType"] == "ContractDefinition") {
 			string contractName = ast["name"].asString();
+			Json::Value defaultConst;
+			defaultConst["defaultConst"] = true;
+			defaultConst["src"] = ast["src"];
+			contractContruct[contractName] = defaultConst;
 			solver s(ctx);
 			for (auto node : ast["nodes"])
 				if (node["nodeType"] == "FunctionDefinition" && !node["body"].isNull()) {
 					string name = node["id"].asString();
+					node["contract"] = contractName;
 					functionsMap[name] = node;
+					if (node["isConstructor"].asBool() || (node.isMember("kind") || node["kind"] == "constructor"))
+						contractContruct[contractName] = node;
 				}
 				else if (node["nodeType"] == "StructDefinition") {
 					try {
@@ -340,7 +356,8 @@ void Verifier::scanContract(Json::Value ast, vector<pair<string, Json::Value>>& 
 						}
 
 						Struct* structType = new Struct(name, vec);
-						EVisitor::addGlobalVar(contractName + "." + name + ".Struct", { structType, 0 });
+						node["num"] = 0;
+						EVisitor::addGlobalVar(contractName + "." + name + ".Struct", { structType, node });
 					}
 					catch (std::exception e) {
 						ast["nodes"].append(node);
@@ -356,7 +373,8 @@ void Verifier::scanContract(Json::Value ast, vector<pair<string, Json::Value>>& 
 					for (auto mem : node["members"])
 						vec.push_back(mem["name"].asString());
 					Enum* _enum = new Enum(name, vec);
-					EVisitor::addGlobalVar(contractName + "." + name + ".Enum", { _enum, 0 });
+					node["num"] = 0;
+					EVisitor::addGlobalVar(contractName + "." + name + ".Enum", { _enum, node });
 				}
 				else if (node["nodeType"] == "VariableDeclaration")
 					vars.push_back(make_pair(contractName, node));
@@ -415,8 +433,9 @@ void Verifier::getAllFunction(Json::Value ast)
 	solver s(ctx);
 	for (auto var : vars) {
 		Type* type = getVarDeclType(var.second["typeName"], s);
+		var.second["num"] = 0;
 		if (type != NULL) {
-			EVisitor::addGlobalVar(var.second["id"].asString(), { type, 0 });
+			EVisitor::addGlobalVar(var.second["id"].asString(), { type, var.second });
 		}
 	}
 }
@@ -724,3 +743,4 @@ void Verifier::increaseVar(solver& s, map < string, pair<ValType*, int>>& vars) 
 		s.add(old == newV);
 	}
 }
+

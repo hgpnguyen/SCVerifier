@@ -277,20 +277,38 @@ expr_vector readTrace(string trace, context& ctx) {
 	return vec;
 }
 
-size_t find(string str, size_t from, map<char, string> m) {
+size_t find(string str, size_t from, map<string, string> m) {
 	for (size_t i = from; i < str.length(); i++)
-		if (m.find(str[i]) != m.end())
+		if (m.find(str.substr(i, 2)) != m.end())
 			return i;
 	return string::npos;
 }
 
 string toRawStr(std::string str) {
-	size_t start_pos = 0;
+	/*size_t start_pos = 0;
 	map<char, string> spChar;
 	spChar['\n'] = "\\n"; spChar['\t'] = "\\t";
 	while ((start_pos = find(str, start_pos, spChar)) != std::string::npos) {
 		string to = spChar[str[start_pos]];
 		str.replace(start_pos, 1, to);
+		start_pos += to.length(); // Handles case where 'to' is a substring of 'from'
+	}
+	return str;*/
+	Json::Value raw(str);
+	stringstream r;
+	r << raw;
+	return r.str();
+}
+
+std::string replaceAll(std::string str)
+{
+	size_t start_pos = 0;
+	map<string, string> spChar;
+	spChar["\\n"] = "\n"; spChar["\\t"] = "\t"; spChar["\\v"] = "\v"; spChar["\\f"] = "\f";
+	spChar["\\r"] = "\r"; spChar["\\b"] = "\b"; spChar["\\\""] = "\"";
+	while ((start_pos = find(str, start_pos, spChar)) != std::string::npos) {
+		string to = spChar[str.substr(start_pos, 2)];
+		str.replace(start_pos, 2, to);
 		start_pos += to.length(); // Handles case where 'to' is a substring of 'from'
 	}
 	return str;
@@ -365,6 +383,18 @@ vector<string> splitExp(string str_exp) { // split exp string into mutiple compo
 	return cont;
 }
 
+string exec(const char* cmd) {
+	std::array<char, 128> buffer;
+	std::string result;
+	std::shared_ptr<FILE> pipe(_popen(cmd, "r"), _pclose);
+	if (!pipe) throw std::runtime_error("popen() failed!");
+	while (!feof(pipe.get())) {
+		if (fgets(buffer.data(), 128, pipe.get()) != nullptr)
+			result += buffer.data();
+	}
+	return result;
+}
+
 void bv2int(pair<expr*, ValType*>& p)
 {
 	context& c = p.first->ctx();
@@ -391,6 +421,89 @@ bool* str2bv(string str)
 			bv[8 * i + j] = temp[j] == '1';
 	}
 	return bv;
+}
+
+std::string str2hex(std::string str)
+{
+	auto bi = str2bv(str);
+	string temp = "";
+	for (auto i = 0; i < str.size() * 8; ++i)
+		temp += to_string(bi[i]);
+	return "0x" + bi2hex(temp);
+}
+
+const char* hex_char_to_bin(char c)
+{
+	switch (toupper(c)) 
+	{
+	case '0': return "0000";
+	case '1': return "0001";
+	case '2': return "0010";
+	case '3': return "0011";
+	case '4': return "0100";
+	case '5': return "0101";
+	case '6': return "0110";
+	case '7': return "0111";
+	case '8': return "1000";
+	case '9': return "1001";
+	case 'A': return "1010";
+	case 'B': return "1011";
+	case 'C': return "1100";
+	case 'D': return "1101";
+	case 'E': return "1110";
+	case 'F': return "1111";
+	default: throw "invalid char";
+	}
+}
+
+std::string hex_str_to_bin_str(const std::string& hex)
+{
+	std::string bin;
+	std::string _hex = hex.substr(0, 2) == "0x" ? hex.substr(2) : hex;
+	for (unsigned i = 0; i != _hex.length(); ++i)
+		bin += hex_char_to_bin(_hex[i]);
+	return bin;
+}
+
+bool* hex_str_to_bool_arr(unsigned n, std::string hex)
+{
+	bool* arr = new bool[n] {false};
+	std::string bin_str = hex_str_to_bin_str(hex);
+
+	for (int i = 0; i < bin_str.size(); ++i) {
+		arr[i] = bin_str[bin_str.size() - i - 1] == '0' ? false : true;
+	}
+	return arr;
+}
+
+std::string toHex(expr a, int size)
+{
+	context& c = a.ctx();
+	expr hexVal = c.bv_val(a.get_decimal_string(0).c_str(), size * 4);
+	std::string hexStr = hexVal.to_string().substr(2);
+	if (a.get_decimal_string(0) != "0" & hexStr == string(size, '0')) // for the overflow of a;
+		hexStr = string(size, 'f');
+	return hexStr;
+}
+
+std::string toHexSigned(expr a, int size)
+{
+	if (a.get_decimal_string(0)[0] != '-')
+		return toHex(a, size);
+	string temp = '1' + string(size * 4, '0'); // 2 ^ (size * 4);
+	context& c = a.ctx();
+	expr x = c.int_const("x");
+	expr twoComp = c.int_val(c.bv_val(temp.c_str(), size * 4 + 1).get_decimal_string(0).c_str()) + a;
+	solver s(c);
+	s.add(x == twoComp);
+	s.check();
+	if (s.check())
+		cout << s.get_model() << endl;
+	else cout << "Error" << endl;
+	model m = s.get_model();
+	expr hexVal = c.bv_val(m.eval(x).get_decimal_string(0).c_str(), size * 4);
+
+	return hexVal.to_string().substr(2);
 }
 
 void extend(pair<expr*, ValType*>& p, unsigned int i) {
@@ -425,6 +538,9 @@ void misMatch(pair<expr*, ValType*>& result)
 		int2Bv(result);
 	}
 }
+
+
+
 
 Json::Value createAssert(Json::Value param)
 {
@@ -595,9 +711,9 @@ ValType* getType(Json::Value exp) {
 	if (type.substr(0, 5) == "bytes")
 		return new Byte(stoul(type.substr(5, type.length())) * 8);
 	if (type.substr(0, 14) == "literal_string")
-			return new Byte(256); 
+			return new Byte(256, true); 
 	if (type.substr(0, 6) == "string")
-		return  new Byte(256);
+		return  new Byte(256, true);
 	/*if (type.find("tuple()") != string::npos)
 		return NULL;
 	if (type.find("msg") != string::npos)
@@ -649,7 +765,7 @@ Type* getAllType(Json::Value exp)
 		auto temp = getType(typeName.substr(0, t));
 		if (temp == NULL)
 			return NULL;
-		return new Array(temp);
+		return new DynamicArray(temp);
 	}
 	if (cont[0] == "struct") {
 		string structName = cont[1] + ".Struct";
@@ -666,7 +782,7 @@ Type* getAllType(Json::Value exp)
 		return type.first;
 	}
 	if (cont[0] == "bytes")
-		return new Array(new Byte(8));
+		return new Byte(256, true);
 	if (cont[0] == "class")
 		return NULL;
 	
@@ -704,6 +820,21 @@ map<string, string> getTypeConstraint(string typeConstraint)
 
 
 	return visitor.getType();
+}
+
+Type* mapType(Json::Value code, solver& s)
+{
+	vector<Type*> list_index;
+	list_index.push_back(getVarDeclType(code["keyType"], s));
+	Json::Value array_type = code["valueType"];
+	while (array_type["nodeType"] == "Mapping") {
+		list_index.push_back(getVarDeclType(array_type["keyType"], s));
+		array_type = array_type["valueType"];
+	}
+	Type* value_type = getVarDeclType(array_type, s);
+	//auto m = new Map(getVarDeclType(code["keyType"], s), getVarDeclType(code["valueType"], s));
+	auto m = new Map(list_index, value_type);
+	return m;
 }
 
 Type* userDefType(Json::Value code, solver& s)
@@ -813,7 +944,7 @@ string getReturnStr(Json::Value json)
 string getVarDeclStr(Json::Value json)
 {
 	string typeName = json["typeName"].isNull() ? "var" : getCode(json["typeName"]);
-	string result = typeName + json["name"].asString();
+	string result = typeName + " " + json["name"].asString();
 	return result;
 }
 

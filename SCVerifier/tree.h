@@ -13,7 +13,6 @@
 #include "SolidityParser.h"
 
 
-using namespace std;
 using namespace z3;
 using namespace antlr4;
 

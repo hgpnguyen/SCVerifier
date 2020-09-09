@@ -19,14 +19,17 @@
 #include <chrono>
 
 
+
+
 using namespace std;
 using namespace z3;
 using namespace antlr4;
 
-#define TIMELIMIT 120;
+#define TIMELIMIT 60;
 
 typedef std::chrono::system_clock Clock;
 class EVisitor;
+struct Report;
 struct ExpInfo {
 	vector<string> codeActivates;
 	Json::Value exp;
@@ -44,7 +47,7 @@ struct Report;
 struct Verifier {
 	context ctx;
 	vector<SolEncode> Lencode; //remove
-	map<string, vector<string>> functionCodeList;
+	map<string, Json::Value> contractContruct;
 	map<string, ExpInfo> expList;
 	map<string, Json::Value> functionsMap;
 	typedef expr(* pfunc) (expr l, expr r);
@@ -83,26 +86,6 @@ private:
 	void scanContract(Json::Value ast, vector<pair<string, Json::Value>>& vars);
 
 
-};
-
-struct Report {
-	bool result;
-	string report;
-
-	Report(bool result) {
-		this->result = result;
-	}
-
-	Report(bool result, model m) {
-		this->result = result;
-		for (unsigned i = 0; i < m.size(); i++) {
-			func_decl v = m[i];
-			assert(v.arity() == 0);
-			string name = v.name().str();
-			if(name[name.size()-1] == '0' && name.substr(0, 4) != "temp")
-				report += name.substr(0, name.size() - 1) + " = " + m.get_const_interp(v).to_string() + "\n";
-		}
-	}
 };
 
 

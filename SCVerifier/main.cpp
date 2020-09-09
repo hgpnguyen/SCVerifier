@@ -1,53 +1,62 @@
 #include <stdio.h>
+#include <cstdio>
 #include <iostream>
 #include "c++/z3++.h"
-#include "utility.h"
 #include "antlr4-runtime.h"
 #include "Visitor.h"
 #include <bitset>
 #include "BigInt.h"
-#include <filesystem>
+#include "synthesis.h"
+#include "verifier.h"
 
-namespace fs = std::filesystem;
+
+
 
 using namespace z3;
-using namespace std;
 using namespace antlr4;
 
 
 Report fullCheck(Verifier& verifier, string trace, string constraints, vector<string> name, vector<TreeRoot> listFunc) {
 	auto trace_ = verifier.getTraceContrainst(trace);
-	/*cout << "TRACE: ";
+	/*std::std::cout << "TRACE: ";
 	for (auto i : trace_) {
-		cout << i.first << " ";
+		std::cout << i.first << " ";
 	}
-	cout << endl;*/
+	std::cout << endl;*/
+	auto start = Clock::now();
 	for (int i = 0; i < name.size(); ++i) {
-		//cout << name[i] << endl;
+		//std::cout << name[i] << endl;
 		auto temp = listFunc[i];
+		//cout << verifier.functionsMap[name[i]]["name"] << endl;
 		Report report = verifier.checkTrace(trace_, constraints, temp);
+		auto end = Clock::now();
+		auto lengthOfTime = std::chrono::duration_cast<std::chrono::seconds>(end - start).count();
+		if(lengthOfTime > 300)
+			return Report(false, verifier.ctx);
 		bool check = report.result;
-		//cout << "-------------------------------------------------------------------------------" << endl;
+		//std::cout << "-------------------------------------------------------------------------------" << endl;
 		CondNode::m.clear();
-		if (check)
+		if (check) {
+			report.functionIndex = i;
 			return report;
+		}
 	}
-	return Report(false);
+	return Report(false, verifier.ctx);
 }
 
 /*bool check1(Verifier& verifier, string trace, string constraints, vector<string> name, vector<TreeRoot> listFunc, int index) {
 	auto trace_ = verifier.getTraceContrainst(trace);
-	/*cout << "TRACE: ";
+	/*std::cout << "TRACE: ";
 	for (auto i : trace_) {
-		cout << i.first << " ";
+		std::cout << i.first << " ";
 	}
-	cout << endl;*/
+	std::cout << endl;*/
 	/*string contractName = name[index].substr(0, name[index].find('.'));
 
-	//cout << name[index] << endl;
+	//std::cout << name[index] << endl;
 	auto temp = listFunc[index];
 	bool check = verifier.checkTrace(trace_, constraints, temp);
-	//cout << "-------------------------------------------------------------------------------" << endl;
+	//std::cout << "-------------------------------------------------------------------------------" << endl;
 	CondNode::m.clear();
 	EVisitor::resetGlobalvar();
 	if (check)
@@ -56,199 +65,151 @@ Report fullCheck(Verifier& verifier, string trace, string constraints, vector<st
 	return false;
 }*/
 
-pair<int, int> checkContract(Json::Value json, string smartContract) {
-	Verifier verifier;
+tuple<int, int> temp(Verifier& verifier, string trace, string constraints, vector<string> name, vector<TreeRoot> listFunc, ofstream& myfile, Bug bug) {
+	int result, syn = 0;
+	Report re = fullCheck(verifier, trace, constraints, name, listFunc);
+	if (re.result) {
+		try {
+		re.genReport();
+		re.bug = bug;
+		Json::Value func = verifier.functionsMap[name[re.functionIndex]];
+		//cout << func["contract"].asString() << endl;
+		Json::Value constr = verifier.contractContruct[func["contract"].asString()];
+			re.synthesis(func, constr);
+			myfile << "Function: " + func["name"].asString() + "(" + getParamStr(func["parameters"]["parameters"]) + ")\n";
+			myfile << re.report;
+			myfile << "\n";
+			if (!re.result)
+				syn = 1;
+		}
+		catch (std::exception e) {
+			std::cout << "ERROR: " << e.what() << endl;
+		}
+		catch (...) {
 
+		}
+	}
+	result = re.result;
+	return make_tuple(result, syn);
+}
+
+tuple<int, int, int, int> checkContract(Json::Value json, string smartContract) {
+	Verifier verifier;
+	context& c = verifier.ctx;
 
 	verifier.getAllFunction(json);
 	vector<TreeRoot> listFunc;
 	vector<string> listContract;
 	for (auto key : extract_keys(verifier.functionsMap)) {
-		//cout << "Contract: " << key << endl;
-			//cout << "Function: " << i << endl;
-		TreeRoot tree(verifier.functionsMap[key], 1, verifier.functionsMap);
+		//std::cout << "Contract: " << key << endl;
+			//std::cout << "Function: " << i << endl;
+		TreeRoot tree(verifier.functionsMap[key], 2, verifier.functionsMap);
 		listContract.push_back(key);
 		listFunc.push_back(tree);
-			//cout << "Not Depth: " << tree.getDepth(false) << endl;
-			//cout << "Depth:     " << tree.getDepth() << endl;
+			//std::cout << "Not Depth: " << tree.getDepth(false) << endl;
+			//std::cout << "Depth:     " << tree.getDepth() << endl;
 			//verifier.checkTrace(trace_, *tree);
 	}
 
-	int num = 9;
 	string trace = "T->{x <= MAX}x=E;{x > MAX}->T";
 	string trace2 = "T->{x >= MIN}x=E;{x < MIN}->T";
 	string typeConstraint = "int x; expr E;";
 	//check1(verifier, trace2, typeConstraint, listContract, listFunc, 4);
-	int max, min;
+	tuple<int, int> max, min;
 	ofstream myfile;
-	myfile.open("./resources/report/" + smartContract + ".txt");
+	myfile.open("./resources/report/" + smartContract + "2.txt");
+	myfile << "Overflow: \n";
 	try {
-		Report re = fullCheck(verifier, trace, typeConstraint, listContract, listFunc);
-		max = re.result;
-		if (max) {
-			myfile<< "Overflow: \n";
-			myfile << re.report;
-			myfile << "\n";
-		}
+		max = temp(verifier, trace, typeConstraint, listContract, listFunc, myfile, Overflow);
 	}
 	catch (std::exception e) {
-		cout << "ERROR: " << e.what() << endl;
-		max = 3;
+		std::cout << "ERROR: " << e.what() << endl;
+		max = { 3, 0 };
 	}
 	catch (...) {
-		cout << "ERROR" << endl;
-		max = 3;
+		std::cout << "ERROR" << endl;
+		max = { 3, 0,};
 	}
+	myfile << "Underflow: \n";
 	try {
-		Report re = fullCheck(verifier, trace2, typeConstraint, listContract, listFunc);
-		min = re.result;
-		if (min) {
-			myfile << "Underflow: \n";
-			myfile << re.report;
-		}
+		min = temp(verifier, trace2, typeConstraint, listContract, listFunc, myfile, Underflow);
 	}
 	catch (std::exception e) {
-		cout << "ERROR: " << e.what() << endl;
-		min = 3;
+		std::cout << "ERROR: " << e.what() << endl;
+		min = { 3, 0 };
 	}
 	catch (...) {
-		cout << "ERROR" << endl;
-		min = 3;
+		std::cout << "ERROR" << endl;
+		min = { 3, 0, };
 	}
-
+	myfile.close();
 	EVisitor::resetGlobalvar();
-	return { max, min };
+	return { get<0>(max), get<1>(max), get<0>(min), get<1>(min) };
 }
 
+void read_directory(const std::string& name, vector<string>& v)
+{
+	std::string pattern(name);
+	pattern.append("\\*");
+	WIN32_FIND_DATA data;
+	HANDLE hFind;
+	if ((hFind = FindFirstFile(pattern.c_str(), &data)) != INVALID_HANDLE_VALUE) {
+		do {
+			if (!(data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+				v.push_back(data.cFileName);
+		} while (FindNextFile(hFind, &data) != 0);
+		FindClose(hFind);
+	}
+}
+
+string sourceCode;
 map<string, Json::Value> CondNode::m{ };
-map < string, pair<Type*, int>> EVisitor::Globalvars{ };
+map < string, pair<Type*, Json::Value>> EVisitor::Globalvars{ };
 
 int main() {
-	//std::string path = "./etherscan_verified_contracts-master/output";
-	std::string path = "./resources/output";
+	std::string path = "./etherscan_verified_contracts-master";
+	//std::string path = "./resources";
 	fstream fout;
+	
 	fout.open("reportcard.csv", ios::out | ios::app);
 	int start, end, i = -1;
-	//start = 1213;
-	//start = 294;
-	start = 0;
-	end = 20;
-	for (const auto& entry : fs::directory_iterator(path)) {
+	//start = 299;
+	start = 4539;
+	end = 5000;
+	vector<string> fileNames;
+	read_directory(path + "/output", fileNames);
+	for (const auto& entry : fileNames) {
 		i++;
 		if (i < start)
 			continue;
-		string filePath = entry.path().string();
-		string smartContract = filePath.substr(path.length() + 1, filePath.find('.', path.length()) - path.length() - 1);
-		cout << smartContract << " " << i << endl;
+		string filePath = entry;
+		string smartContract = filePath.substr(0, filePath.find('.'));
+		std::cout << smartContract << " " << i << endl;
 		Json::Value root;
-		root = readJson(path + "/" + smartContract + ".sol_json.ast");
-		pair<int, int> result;
+		root = readJson(path + "/output/" + smartContract + ".sol_json.ast");
+		ifstream f(path + "/contracts/" + smartContract + ".sol");
+		string contents((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+		sourceCode = toRawStr(contents);
+		tuple<int, int, int, int> result;
 		try {
 			result = checkContract(root, smartContract);
 		}
 		catch (std::exception e) {
-			cout << "ERROR: " << e.what() << endl;
-			result = { 3, 3 };
+			std::cout << "ERROR: " << e.what() << endl;
+			result = { 3, 0, 3, 0 };
 		}
 		catch (...) {
-			cout << "ERROR" << endl;
-			result = { 3, 3 };
+			std::cout << "ERROR" << endl;
+			result = { 3, 0, 3, 0 };
 		}
-		fout << smartContract << "," << result.first << "," << result.second << endl;
-		if (i >= end)
+		fout << smartContract << "," << get<0>(result) << "," << get<1>(result) << "," << get<2>(result) << "," << get<3>(result) << endl;
+	if (i >= end)
 			break;
-		/*if (result.first)
-			cout << "Overflow" << endl;
-		if (result.second)
-			cout << "Underflow" << endl;*/
-	}
-	/*cout << name[num] << endl;
-	auto temp = listFunc[num];
 
-	verifier.checkTrace(trace_, typeConstraint, temp);*/
-
-	
-	// trace: T->a->T
-
-	/*string trace = "expr x;";
-	ANTLRInputStream input(trace);
-	SolidityLexer lexer(&input);
-	CommonTokenStream tokens(&lexer);
-	SolidityParser parser(&tokens);
-	SolidityParser::TypeDeclContext* tree = parser.typeDecl();
-	cout << tree << endl;
-
-
-	//model m = s.get_model();
-	//cout << m << endl;
-
-	/*context c;
-	sort_vector sort_vec(c);
-	sort_vec.push_back(c.bv_sort(160));
-	sort_vec.push_back(c.bv_sort(160));
-	z3::sort map_sort = c.array_sort(sort_vec, c.int_sort());
-	expr map = c.constant(c.str_symbol("m"), map_sort);
-	expr a = c.bv_const("a", 160);
-	expr b = c.bv_const("b", 160);
-	expr_vector vec(c);
-	vec.push_back(a);
-	vec.push_back(b);
-	expr k = select(map, vec) == 10;
-	expr const_int = c.int_val(10);
-	solver s(c);
-	s.add(store(map, vec, const_int) == map);
-	s.add(k);
-	cout << s << endl;
-	cout << s.check() << endl;*/
-
-	/*string address = "0xd06cb7A1b2Ccd1D3AF";
-	int len = 256;
-	cout << address.size() << endl;
-
-	//unsigned long long k = strtoull(address.c_str(), 0, 16);
-	//cout << k << endl;
-	context c;
-	//string str_k = to_string(k);
-	auto bool_str = hex_str_to_bool_arr(len, address);
-	for (int i = 0; i < len; i++)
-		cout << bool_str[i];
-	cout << endl;
-	expr bv = c.bv_val("1259841088174951335562403333186447673233413100463", 160);
-	cout << bv << endl;
-	bool bv_arr[] = { true, false, false, true , false};
-	expr bv2 = c.bv_val(len, bool_str);
-	cout << bv2 << endl;*/
-
-
-	/*context c;
-	vector<pair<string, Type*>> listType;
-	func_decl_vector projs(c);
-	const char* name_[3] = { "yetNeeded", "ownerDone", "index" };
-	string name = "PendingState";
-	listType.push_back({ "yetNeeded", new UInt(256) });
-	listType.push_back({ "ownerDone", new UInt(256) });
-	listType.push_back({ "index", new UInt(256) });
-	int size = listType.size();
-	char* _names[10];
-	z3::sort sorts[10] = { c.int_sort(), c.int_sort(), c.int_sort(),
-		c.int_sort(), c.int_sort(), c.int_sort(), c.int_sort(), c.int_sort(), c.int_sort(), c.int_sort() };
-
-	int i = 0;
-	for (auto mem : listType) {
-		_names[i] = strdup(mem.first.c_str());
-		sorts[i++] = mem.second->getSort(c);
 	}
 
-	cout << size << endl;
-	func_decl structDecl = c.tuple_sort(name.c_str(), size, _names, sorts, projs);
-	for (auto func : projs)
-		cout << func << endl;
-		*/
-	
 
-	
-
-	system("pause");
+	std::system("pause");
 	return 0;
 }
 

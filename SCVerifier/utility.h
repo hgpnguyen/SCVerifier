@@ -11,16 +11,15 @@
 #include <cmath>
 #include "c++/z3++.h"
 #include "json/json.h"
-#include "verifier.h"
 #include "tree.h"
 #include "Visitor.h"
 
-using namespace std;
 using namespace z3;
 
 extern string sourceCode;
 
-SolEncode convert(Json::Value ctx, Verifier& global);
+
+
 string getCode(Json::Value ctx);
 Json::Value readJson(string filename);
 expr makeStringFunction(context* c, string s);
@@ -28,27 +27,31 @@ void jsonScan(Json::Value root, Verifier& global);
 void split(const string& str, vector<string>& result, char delim);
 void split(const std::string& str, vector<string>& cont, string delim = " ");
 void addExp(Json::Value exp, string codeExcute, bool isTrue, Verifier& global);
-SolEncode block(Json::Value ctx, Verifier& global);
-SolEncode ifStmt(Json::Value ctx, Verifier& global);
-SolEncode forStmt(Json::Value ctx, Verifier& global);
-SolEncode whileStmt(Json::Value ctx, Verifier& global);
-SolEncode doWhileStmt(Json::Value ctx, Verifier& global);
-SolEncode expressionStmt(Json::Value ctx, Verifier& global);
-SolEncode otherStmt(Json::Value ctx, Verifier& global);
-bool assignment(Json::Value ctx, Verifier& global);
-bool expression(Json::Value ctx, Verifier& global, string leftId);
 size_t find(string str, size_t from, map<char, string> m);
-string toRawStr(std::string str);
+std::string toRawStr(std::string str);
+std::string replaceAll(std::string str);
 vector<string> infixToPostfix(string str_exp);
 expr_vector readTrace(string trace, context& ctx);
 vector<string> splitExp(string str_exp);
+string exec(const char* cmd);
 
 void bv2int(pair<expr*, ValType*>& p);
 void int2Bv(pair<expr*, ValType*>& p, int size = NULL);
 bool* str2bv(string str);
+std::string int2hex(int val, int size);
+std::string bi2hex(std::string binary);
+std::string str2hex(std::string str);
+const char* hex_char_to_bin(char c);
+std::string hex_str_to_bin_str(const std::string& hex);
+bool* hex_str_to_bool_arr(unsigned n, std::string hex);
+std::string toHex(expr a, int size);
+std::string toHexSigned(expr a, int size);
+
+
 void extend(pair<expr*, ValType*>& p, unsigned int i);
 void preCheck(pair<expr*, ValType*>& l, pair<expr*, ValType*>& r, string op);
 void misMatch(pair<expr*, ValType*>& result);
+
 
 Json::Value createAssert(Json::Value param);
 Json::Value createUnary(Json::Value param, string op);
@@ -67,15 +70,20 @@ Type* getAllType(Json::Value exp);
 Type* getVarDeclType(Json::Value, solver& s);
 map<string, string> getTypeConstraint(string typeConstraint);
 
-inline Type* eleType(Json::Value code, solver& s) { if (code["typeDescriptions"]["typeString"].asString() != "bytes") return getType(code); else return new Array(new Byte(8)); }
+inline Type* eleType(Json::Value code, solver& s) { if (code["typeDescriptions"]["typeString"].asString() != "bytes") return getType(code); else return new Byte(256, true); }
 inline Type* arrType(Json::Value code, solver& s) {
 	Type* type = getAllType(code["baseType"]);
 	if (type == NULL)
 		return NULL;
-	return new Array(type); }
-inline Type* mapType(Json::Value code, solver& s) { 
-	auto m = new Map(getVarDeclType(code["keyType"], s), getVarDeclType(code["valueType"], s));
-	return m; }
+	if (code.isMember("length") && !code["length"].isNull()) {
+		size_t left = code["typeDescriptions"]["typeString"].asString().find('['), 
+			right = code["typeDescriptions"]["typeString"].asString().find(']', left);
+		int length = stoi(code["typeDescriptions"]["typeString"].asString().substr(left + 1, right - left - 1));
+		return new FixArray(type, length);
+	}
+
+	return new DynamicArray(type); }
+Type* mapType(Json::Value code, solver& s);
 Type* userDefType(Json::Value code, solver& s);
 
 template<typename TK, typename TV>

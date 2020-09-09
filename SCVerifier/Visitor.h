@@ -62,8 +62,10 @@ class EVisitor {
 	map < string, pair<Type*, int>> vars;
 	map <string, Json::Value> decodeSol;
 	unordered_set<string> init; //Use to init Globalvars in each function
+	unordered_set<string> global; //globalVar and msg, block;
+	map<string, Json::Value> mapVar; //record all instance of mapping
 	
-	static map < string, pair<Type*, int>> Globalvars;
+	static map < string, pair<Type*, Json::Value>> Globalvars;
 public:
 
 	EVisitor(string prefix, map<string, Json::Value>& decodeSol, map<string, string>& encodeSol) {
@@ -72,14 +74,22 @@ public:
 		this->encodeSol = encodeSol;
 	}
 
+	EVisitor() {
+		prefix = "";
+	}
+
 	expr visit(Json::Value code, solver& s, bool isLeft = false);
 	map < string, pair<Type*, int>> getVars() { return vars; }
+	map<string, Json::Value> getMapVar() { return mapVar; }
 	Json::Value toJson(string str);
-	static void addGlobalVar(string name, pair<Type*, int > var) { Globalvars[name] = var; }
-	static pair<Type*, int > findGlobalVar(string name) { if (Globalvars.find(name) != Globalvars.end()) return Globalvars[name]; else return { NULL, -1 }; }
+	static void addGlobalVar(string name, pair<Type*, Json::Value > var) { Globalvars[name] = var; }
+	static pair<Type*, Json::Value > findGlobalVar(string name) { if (Globalvars.find(name) != Globalvars.end()) return Globalvars[name]; else return { NULL, Json::nullValue }; }
 	void resetVar() { vars.clear(); }
 	static void resetGlobalvar() { Globalvars.clear(); }
 	static void resetGlobalVarIndex();
+	unordered_set<string> getKeys();
+	void setPrefix(string prefix) { this->prefix = prefix; }
+	void resetVarIndex();
 
 private:
 	expr exprStmt(Json::Value, solver& s, bool isLeft = false);
@@ -106,9 +116,12 @@ private:
 	string encode(string code);
 	int findVar(string name);
 	expr memberAccess2(Json::Value code, solver& s, bool isLeft = false);
+	expr indexAccess2(Json::Value code, solver& s, bool isLeft = false);
 	expr enumAccess(Json::Value code, solver& s, bool isLeft = false);
 	expr assignTuple(Json::Value code, solver& s, bool isLeft = false);
 	expr createTemp(Type* type, solver& s);
+	Type* getTypeId(Json::Value code);
+	expr declVar(Json::Value code, solver& s, bool isInit);
 
 };
 

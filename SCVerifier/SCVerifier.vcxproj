@@ -92,7 +92,7 @@
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>C:\Users\Nghe\source\repos\hgpnguyen\library\z3\src\api;C:\Users\Nghe\source\repos\hgpnguyen\library\antlr4-cpp\antlr4-runtime;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp14</LanguageStandard>
       <AdditionalOptions>/D _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS %(AdditionalOptions)</AdditionalOptions>
       <ExceptionHandling>Async</ExceptionHandling>
     </ClCompile>
@@ -140,6 +140,7 @@
     <ClCompile Include="BigInt.cpp" />
     <ClCompile Include="jsoncpp.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="sysnthesis.cpp" />
     <ClCompile Include="tree.cpp" />
     <ClCompile Include="type.cpp" />
     <ClCompile Include="utility.cpp" />
@@ -149,6 +150,7 @@
   <ItemGroup>
     <ClInclude Include="BigInt.h" />
     <ClInclude Include="stdc++.h" />
+    <ClInclude Include="synthesis.h" />
     <ClInclude Include="tree.h" />
     <ClInclude Include="type.h" />
     <ClInclude Include="utility.h" />

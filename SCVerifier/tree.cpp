@@ -237,7 +237,8 @@ list<TreeNode*> TreeRoot::functionCall(Json::Value ctx, int depth)
 	if (ctx["expression"]["nodeType"] == "Identifier" && ctx["expression"]["name"] == "assert")
 		return visit(ctx["arguments"][0], depth);
 	list<TreeNode*> result;
-	string funcName = ctx["expression"]["name"].isNull() ? getCode(ctx["expression"]) : ctx["expression"]["name"].asString() + "(" + getParamStr(ctx["arguments"]) + ")"; //type Conversion function dont have name
+	//string funcName = ctx["expression"]["name"].isNull() ? getCode(ctx["expression"]) : ctx["expression"]["name"].asString() + "(" + getParamStr(ctx["arguments"]) + ")"; //type Conversion function dont have name
+	string funcName = ctx["expression"]["referencedDeclaration"].asString();
 	map<string, Json::Value>::iterator iter;
 	if (depth == 0 || (iter = functionsMap.find(funcName)) == functionsMap.end()) {
 		return list<TreeNode*>();
@@ -443,9 +444,12 @@ string FuncNode::DepthFS(bool isDepth)
 
 void FuncNode::toZ3(EVisitor& visitor, solver& s)
 {
-	Type* type = getAllType(visitor.toJson(value));
+	Json::Value func = visitor.toJson(value);
+	Type* type = getAllType(func);
+	string funcName = getCode(func) + "_" + to_string(0);
 
 	EVisitor newVisitor = visitor;
+	newVisitor.setPrefix(func["name"].asString());
 	expr temp(s.ctx());
 	newVisitor.resetVar();
 	for (auto child : children) {
@@ -457,7 +461,7 @@ void FuncNode::toZ3(EVisitor& visitor, solver& s)
 	if (type != NULL) {
 		if (temp.to_string() == "null")
 			return;
-		expr funcVar = type->getVar(s.ctx(), value);
+		expr funcVar = type->getVar(s.ctx(), funcName);
 		expr return_ = funcVar == temp;
 		s.add(return_);
 	}
